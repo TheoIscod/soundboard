@@ -1,4 +1,3 @@
-import AppKit
 import SoundboardCore
 import SwiftUI
 
@@ -27,7 +26,7 @@ struct TileView: View {
     .padding(8)
     .frame(maxWidth: .infinity, minHeight: 96)
     .background(tile.color.swiftUIColor.opacity(tile.isEnabled ? 1 : 0.35))
-    .overlay(alignment: .topTrailing) { stateIndicator.padding(6) }
+    .overlay(alignment: .topTrailing) { VoiceStateIndicator(state: state).padding(6) }
     .clipShape(RoundedRectangle(cornerRadius: 10))
     .overlay {
       RoundedRectangle(cornerRadius: 10)
@@ -40,39 +39,11 @@ struct TileView: View {
     }
     .scaleEffect(isPressed ? 0.96 : 1)
     .animation(.easeOut(duration: 0.1), value: isPressed)
-    .gesture(pressGesture)
-    .contextMenu { contextMenu }
-    .help("Click: play/stop · ⇧-click: pause · ⌘-click: fade out")
-  }
-
-  /// Fires on mouse-down and mouse-up so Hold to Play tiles can start and stop.
-  private var pressGesture: some Gesture {
-    DragGesture(minimumDistance: 0)
-      .onChanged { _ in
-        guard !isPressed else { return }
-        isPressed = true
-        model.press(tile, modifier: currentModifier())
-      }
-      .onEnded { _ in
-        isPressed = false
-        model.release(tile)
-      }
-  }
-
-  private func currentModifier() -> TriggerModifier {
-    let flags = NSEvent.modifierFlags
-    if flags.contains(.shift) { return .pause }
-    if flags.contains(.command) { return .fade }
-    return .none
-  }
-
-  @ViewBuilder
-  private var stateIndicator: some View {
-    switch state {
-    case .playing: Image(systemName: "speaker.wave.2.fill")
-    case .paused: Image(systemName: "pause.fill")
-    case nil: EmptyView()
+    .tileTrigger(tile, model: model, isPressed: $isPressed)
+    .contextMenu {
+      TileContextMenu(tile: tile, model: model, onEdit: onEdit, onDelete: onDelete)
     }
+    .help("Click: play/stop · ⇧-click: pause · ⌘-click: fade out")
   }
 
   private var badges: some View {
@@ -82,27 +53,6 @@ struct TileView: View {
       if tile.holdToPlay { Image(systemName: "hand.point.up.left.fill") }
     }
     .font(.caption)
-  }
-
-  @ViewBuilder
-  private var contextMenu: some View {
-    Button("Edit…", action: onEdit)
-    Divider()
-    Toggle("Loop", isOn: binding(\.player.loops))
-    Toggle("Solo", isOn: binding(\.solo))
-    Toggle("Hold to Play", isOn: binding(\.holdToPlay))
-    Toggle("Enabled", isOn: binding(\.isEnabled))
-    Picker("Color", selection: binding(\.color)) {
-      ForEach(TileColor.allCases, id: \.self) { color in
-        Text(color.displayName).tag(color)
-      }
-    }
-    Divider()
-    Button("Delete…", role: .destructive, action: onDelete)
-  }
-
-  private func binding<Value>(_ keyPath: WritableKeyPath<Tile, Value>) -> Binding<Value> {
-    model.binding(for: tile, keyPath)
   }
 }
 

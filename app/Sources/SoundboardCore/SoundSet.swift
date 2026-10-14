@@ -92,6 +92,61 @@ public struct SoundSet: Codable, Sendable, Equatable, Identifiable {
     self.title = title
   }
 
+  /// Tiles in the grid's reading order.
+  public var gridOrder: [Tile] {
+    tiles.sorted {
+      ($0.gridPosition.row, $0.gridPosition.column) < ($1.gridPosition.row, $1.gridPosition.column)
+    }
+  }
+
+  /// Tiles in list order; equal indices (tiles added before list order was kept) follow the grid.
+  public var listOrder: [Tile] {
+    tiles.sorted {
+      ($0.listIndex, $0.gridPosition.row, $0.gridPosition.column)
+        < ($1.listIndex, $1.gridPosition.row, $1.gridPosition.column)
+    }
+  }
+
+  public var displayOrder: [Tile] {
+    displayMode == .list ? listOrder : gridOrder
+  }
+
+  /// List index for a tile added at the end of the list.
+  public var nextListIndex: Int {
+    (tiles.map(\.listIndex).max() ?? -1) + 1
+  }
+
+  public var firstPlayableTile: Tile? {
+    displayOrder.first { $0.isEnabled }
+  }
+
+  /// The next enabled tile after `tileID` in display order; the list does not wrap around.
+  public func nextPlayableTile(after tileID: UUID) -> Tile? {
+    let order = displayOrder
+    guard let index = order.firstIndex(where: { $0.id == tileID }) else { return nil }
+    return order[(index + 1)...].first { $0.isEnabled }
+  }
+
+  /// The crossfade setting while Continuous is active, nil otherwise.
+  /// Advance modes only act in list mode; a grid never advances on its own.
+  public var continuousCrossfade: TimeInterval? {
+    displayMode == .list && playbackMode == .continuous ? crossfadeDuration : nil
+  }
+
+  /// Tile to select after `tileID` stops, in Cue next mode.
+  public func tileToCue(afterStopping tileID: UUID) -> Tile? {
+    guard displayMode == .list, playbackMode == .toggle else { return nil }
+    return nextPlayableTile(after: tileID)
+  }
+
+  /// How long before the end of a sound Continuous starts the next one and crossfades:
+  /// the set's crossfade, but never more than half the sound.
+  public static func crossfadeLead(crossfade: TimeInterval, soundLength: TimeInterval)
+    -> TimeInterval
+  {
+    min(max(crossfade, 0), max(soundLength, 0) / 2)
+  }
+
   /// First empty cell in reading order, so deleted tiles leave a gap that new tiles fill.
   public func nextFreeGridPosition(columns: Int) -> GridPosition {
     let taken = Set(tiles.map(\.gridPosition))
