@@ -13,7 +13,22 @@ struct SoundboardApp: App {
 
   var body: some Scene {
     WindowGroup("Soundboard") {
-      BoardView(model: model)
+      NavigationSplitView {
+        SetsSidebar(model: model)
+      } detail: {
+        BoardView(model: model)
+      }
+    }
+    .commands {
+      CommandMenu("Sound Set") {
+        Button("New Set") { model.addSet() }
+          .keyboardShortcut("n", modifiers: [.command, .shift])
+        Divider()
+        Button("Select Previous Set") { model.selectPreviousSet() }
+          .keyboardShortcut("[", modifiers: [.command, .shift])
+        Button("Select Next Set") { model.selectNextSet() }
+          .keyboardShortcut("]", modifiers: [.command, .shift])
+      }
     }
   }
 }
