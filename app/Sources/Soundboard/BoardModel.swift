@@ -8,13 +8,24 @@ import UniformTypeIdentifiers
 final class BoardModel {
   static let gridColumns = 6
   private static let selectedSetKey = "selectedSetID"
+  private static let masterVolumeKey = "masterVolume"
 
   private(set) var library: SoundLibrary
+  /// Applies to every set, so it is a preference rather than part of a set.
+  var master: MasterVolume {
+    didSet {
+      engine.setMasterGain(master.gain)
+      saveMaster()
+    }
+  }
+  /// Tile shown in the inspector.
+  var selectedTileID: UUID?
   var errorMessage: String?
 
   private var coordinator = PlaybackCoordinator()
   @ObservationIgnored private let store: SetStore?
   @ObservationIgnored private let engine = AudioEngine()
+  @ObservationIgnored private var durations: [UUID: TimeInterval] = [:]
 
   init() {
     var store: SetStore?
@@ -30,7 +41,9 @@ final class BoardModel {
     self.store = store
     let remembered = UserDefaults.standard.string(forKey: Self.selectedSetKey).flatMap(UUID.init)
     library = SoundLibrary(sets: loaded, selectedSetID: remembered)
+    master = Self.loadMaster()
     errorMessage = loadError
+    engine.setMasterGain(master.gain)
 
     engine.onVoiceFinished = { [weak self] tileID in
       self?.coordinator.voiceDidFinish(tileID)
@@ -116,17 +129,13 @@ final class BoardModel {
     }
     var set = soundSet
     for url in audioURLs {
-      let index = set.tiles.count
       var tile = Tile(
         fileID: UUID(),
         originalFileName: url.lastPathComponent,
         title: url.deletingPathExtension().lastPathComponent
       )
-      tile.gridPosition = GridPosition(
-        column: index % Self.gridColumns,
-        row: index / Self.gridColumns
-      )
-      tile.color = TileColor.allCases[index % TileColor.allCases.count]
+      tile.gridPosition = set.nextFreeGridPosition(columns: Self.gridColumns)
+      tile.color = TileColor.allCases[set.tiles.count % TileColor.allCases.count]
       do {
         try store.importSound(from: url, for: tile, in: set.id)
       } catch {
@@ -146,12 +155,48 @@ final class BoardModel {
     else { return }
     set.tiles[index] = tile
     library.replace(set)
+    engine.update(tile)
     save(set)
+  }
+
+  var selectedTile: Tile? {
+    guard let selectedTileID else { return nil }
+    return library.set(containingTile: selectedTileID)?.tiles.first { $0.id == selectedTileID }
+  }
+
+  /// Removes the tile and its copied sound, stopping it first if it plays.
+  func deleteTile(_ tile: Tile) {
+    guard var set = library.set(containingTile: tile.id) else { return }
+    if coordinator.state(of: tile.id) != nil {
+      engine.stop(tile.id, fade: nil)
+      coordinator.voiceDidFinish(tile.id)
+    }
+    set.tiles.removeAll { $0.id == tile.id }
+    library.replace(set)
+    if selectedTileID == tile.id { selectedTileID = nil }
+    save(set)
+    do {
+      try store?.removeSound(for: tile, in: set.id)
+    } catch {
+      errorMessage = "Couldn’t remove the sound of “\(tile.title)”: \(error.localizedDescription)"
+    }
+  }
+
+  /// Length of the tile's whole sound file, or nil if it can't be read.
+  func duration(of tile: Tile) -> TimeInterval? {
+    if let cached = durations[tile.fileID] { return cached }
+    guard let set = library.set(containingTile: tile.id),
+      let url = store?.soundURL(for: tile, in: set.id),
+      let duration = try? engine.duration(of: url)
+    else { return nil }
+    durations[tile.fileID] = duration
+    return duration
   }
 
   // MARK: Playback
 
   func press(_ tile: Tile, modifier: TriggerModifier) {
+    selectedTileID = tile.id
     perform(coordinator.press(tile, modifier: modifier))
   }
 
@@ -206,6 +251,22 @@ final class BoardModel {
     } catch {
       errorMessage = "Couldn’t save “\(set.title)”: \(error.localizedDescription)"
     }
+  }
+
+  private func saveMaster() {
+    do {
+      UserDefaults.standard.set(try JSONEncoder().encode(master), forKey: Self.masterVolumeKey)
+    } catch {
+      errorMessage = "Couldn’t save the master volume: \(error.localizedDescription)"
+    }
+  }
+
+  /// A missing or unreadable preference falls back to the defaults (A 100 %, B 40 %).
+  private static func loadMaster() -> MasterVolume {
+    guard let data = UserDefaults.standard.data(forKey: masterVolumeKey),
+      let master = try? JSONDecoder().decode(MasterVolume.self, from: data)
+    else { return MasterVolume() }
+    return master
   }
 
   private func rememberSelection() {

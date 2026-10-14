@@ -20,6 +20,17 @@ struct SoundboardApp: App {
       }
     }
     .commands {
+      CommandMenu("Playback") {
+        Button("Fade to Volume \(model.master.usesVolumeB ? "A" : "B")") {
+          model.master.toggleAB()
+        }
+        .keyboardShortcut("d", modifiers: [.command, .shift])
+        Button("Master Volume Up") { model.master.stepUp() }
+          .keyboardShortcut(.upArrow, modifiers: .command)
+        Button("Master Volume Down") { model.master.stepDown() }
+          .keyboardShortcut(.downArrow, modifiers: .command)
+        Toggle("Mute", isOn: $model.master.muted)
+      }
       CommandMenu("Sound Set") {
         Button("New Set") { model.addSet() }
           .keyboardShortcut("n", modifiers: [.command, .shift])

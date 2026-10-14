@@ -53,6 +53,13 @@ public struct SetStore: Sendable {
     try FileManager.default.copyItem(at: source, to: destination)
   }
 
+  /// Deletes the copy of a tile's sound; a copy that is already gone is not an error.
+  public func removeSound(for tile: Tile, in setID: UUID) throws {
+    let url = soundURL(for: tile, in: setID)
+    guard FileManager.default.fileExists(atPath: url.path) else { return }
+    try FileManager.default.removeItem(at: url)
+  }
+
   public func soundURL(for tile: Tile, in setID: UUID) -> URL {
     let fileExtension = (tile.originalFileName as NSString).pathExtension
     let name =
