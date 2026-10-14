@@ -6,6 +6,9 @@ import SoundboardCore
 @MainActor
 final class AudioEngine {
   var onVoiceFinished: ((UUID) -> Void)?
+  /// Continuous mode: the voice reached the point where the next tile should start,
+  /// `lead` seconds before its end (0 = at the end). Fires at most once per voice.
+  var onAdvancePoint: ((UUID, _ lead: TimeInterval) -> Void)?
 
   private let engine = AVAudioEngine()
   private var voices: [UUID: Voice] = [:]
@@ -20,14 +23,28 @@ final class AudioEngine {
     master.move(to: gain, over: voices.isEmpty ? 0 : LinearRamp.volumeChangeDuration)
   }
 
-  func start(_ tile: Tile, url: URL) throws {
+  /// - Parameters:
+  ///   - fadeIn: > 0 starts from silence and ramps up over this time.
+  ///   - continuousCrossfade: the set's crossfade when Continuous is active, to report
+  ///     the advance point through `onAdvancePoint`; nil when the set doesn't advance.
+  func start(
+    _ tile: Tile,
+    url: URL,
+    fadeIn: TimeInterval = 0,
+    continuousCrossfade: TimeInterval? = nil
+  ) throws {
     if voices[tile.id] != nil { removeVoice(tile.id) }
 
     let buffer = try trimmedBuffer(for: tile, url: url)
-    let voice = Voice(
-      settings: tile.player,
-      length: Double(buffer.frameLength) / buffer.format.sampleRate
-    )
+    let length = Double(buffer.frameLength) / buffer.format.sampleRate
+    let voice = Voice(settings: tile.player, length: length)
+    if fadeIn > 0 {
+      voice.fade = LinearRamp(value: 0)
+      voice.fade.move(to: 1, over: fadeIn)
+    }
+    voice.advanceLead = continuousCrossfade.map {
+      SoundSet.crossfadeLead(crossfade: $0, soundLength: length)
+    }
     engine.attach(voice.player)
     engine.connect(voice.player, to: engine.mainMixerNode, format: buffer.format)
     if !engine.isRunning { try engine.start() }
@@ -102,6 +119,8 @@ final class AudioEngine {
   private func voiceReachedEnd(_ tileID: UUID, voice: Voice) {
     // Stopping a node also fires its completion; ignore voices already replaced or removed.
     guard voices[tileID] === voice else { return }
+    // The timer may not have seen the last moments of the sound: advance before finishing.
+    reportAdvanceIfNeeded(tileID, voice: voice, force: true)
     removeVoice(tileID)
     onVoiceFinished?(tileID)
   }
@@ -139,8 +158,17 @@ final class AudioEngine {
         continue
       }
       voice.position = currentPosition(of: voice)
+      reportAdvanceIfNeeded(tileID, voice: voice, force: false)
       voice.player.volume = Gain.snapped(master.value * voice.gain)
     }
+  }
+
+  /// A voice already fading out (stopped by the user or by a crossfade) never advances.
+  private func reportAdvanceIfNeeded(_ tileID: UUID, voice: Voice, force: Bool) {
+    guard let lead = voice.advanceLead, !voice.hasAdvanced, !voice.stopsWhenSilent else { return }
+    guard force || voice.position >= voice.length - lead else { return }
+    voice.hasAdvanced = true
+    onAdvancePoint?(tileID, lead)
   }
 
   private func currentPosition(of voice: Voice) -> TimeInterval {
@@ -182,6 +210,9 @@ private final class Voice {
   var fade = LinearRamp(value: 1)
   var stopsWhenSilent = false
   var position: TimeInterval = 0
+  /// Seconds before the end at which Continuous starts the next tile; nil if it doesn't.
+  var advanceLead: TimeInterval?
+  var hasAdvanced = false
 
   init(settings: PlayerSettings, length: TimeInterval) {
     self.settings = settings

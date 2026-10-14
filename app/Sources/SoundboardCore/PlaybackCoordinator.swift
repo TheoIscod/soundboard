@@ -15,7 +15,8 @@ public enum TriggerModifier: Sendable, Equatable {
 }
 
 public enum PlaybackCommand: Sendable, Equatable {
-  case start(UUID)
+  /// `fadeIn` > 0 starts from silence and ramps up linearly.
+  case start(UUID, fadeIn: TimeInterval = 0)
   /// `fade == nil` stops immediately.
   case stop(UUID, fade: TimeInterval?)
   case pause(UUID)
@@ -32,11 +33,18 @@ public struct PlaybackCoordinator: Sendable {
 
   public func state(of tileID: UUID) -> VoiceState? { states[tileID] }
 
-  /// Mouse-down / key-down on a tile.
-  public mutating func press(_ tile: Tile, modifier: TriggerModifier = .none)
-    -> [PlaybackCommand]
-  {
+  /// Mouse-down / key-down on a tile. In list mode Solo and Hold to Play are ignored.
+  public mutating func press(
+    _ tile: Tile,
+    modifier: TriggerModifier = .none,
+    listMode: Bool = false
+  ) -> [PlaybackCommand] {
     guard tile.isEnabled else { return [] }
+    var tile = tile
+    if listMode {
+      tile.solo = false
+      tile.holdToPlay = false
+    }
     if tile.holdToPlay {
       return states[tile.id] == nil ? start(tile, modifier: modifier) : []
     }
@@ -59,9 +67,9 @@ public struct PlaybackCoordinator: Sendable {
     }
   }
 
-  /// Mouse-up / key-up on a tile: only Hold to Play tiles react.
-  public mutating func release(_ tile: Tile) -> [PlaybackCommand] {
-    guard tile.holdToPlay, states[tile.id] != nil else { return [] }
+  /// Mouse-up / key-up on a tile: only Hold to Play tiles react, and never in list mode.
+  public mutating func release(_ tile: Tile, listMode: Bool = false) -> [PlaybackCommand] {
+    guard !listMode, tile.holdToPlay, states[tile.id] != nil else { return [] }
     states[tile.id] = nil
     return [.stop(tile.id, fade: nil)]
   }
@@ -69,6 +77,24 @@ public struct PlaybackCoordinator: Sendable {
   /// The engine reports that a voice ended on its own (end of file or faded to silence).
   public mutating func voiceDidFinish(_ tileID: UUID) {
     states[tileID] = nil
+  }
+
+  /// Continuous mode: start `next` fading in over `duration` and fade the outgoing tile out
+  /// over the same time, unless it loops, in which case it keeps playing underneath.
+  public mutating func crossfade(
+    from outgoing: Tile,
+    to next: Tile,
+    duration: TimeInterval
+  ) -> [PlaybackCommand] {
+    guard next.isEnabled, next.id != outgoing.id, states[next.id] == nil else { return [] }
+    var commands: [PlaybackCommand] = []
+    if !outgoing.player.loops, states[outgoing.id] != nil {
+      states[outgoing.id] = nil
+      commands.append(.stop(outgoing.id, fade: duration > 0 ? duration : nil))
+    }
+    states[next.id] = .playing
+    commands.append(.start(next.id, fadeIn: duration))
+    return commands
   }
 
   public mutating func stopAll() -> [PlaybackCommand] {

@@ -21,6 +21,12 @@ struct SoundboardApp: App {
     }
     .commands {
       CommandMenu("Playback") {
+        // Farrago also accepts plain Return; ⌃Return can't clash with confirming a text field.
+        Button("Play Selection") { model.playSelection() }
+          .keyboardShortcut(.return, modifiers: .control)
+        Button("Reset List") { model.resetList() }
+          .keyboardShortcut("r", modifiers: .command)
+        Divider()
         Button("Fade to Volume \(model.master.usesVolumeB ? "A" : "B")") {
           model.master.toggleAB()
         }
@@ -34,6 +40,10 @@ struct SoundboardApp: App {
       CommandMenu("Sound Set") {
         Button("New Set") { model.addSet() }
           .keyboardShortcut("n", modifiers: [.command, .shift])
+        Button(model.soundSet.displayMode == .list ? "Switch to Grid Mode" : "Switch to List Mode")
+        {
+          model.setDisplayMode(model.soundSet.displayMode == .list ? .grid : .list)
+        }
         Divider()
         Button("Select Previous Set") { model.selectPreviousSet() }
           .keyboardShortcut("[", modifiers: [.command, .shift])

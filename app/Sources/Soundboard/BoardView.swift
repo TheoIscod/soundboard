@@ -6,6 +6,7 @@ struct BoardView: View {
   @State private var isDropTargeted = false
   @State private var isInspectorPresented = false
   @State private var tilePendingDeletion: Tile?
+  @State private var isSetOptionsPresented = false
 
   private let columns = Array(
     repeating: GridItem(.flexible(), spacing: 10),
@@ -20,19 +21,34 @@ struct BoardView: View {
           systemImage: "waveform",
           description: Text("Each file becomes a tile. Click a tile to play or stop it.")
         )
+      } else if model.soundSet.displayMode == .list {
+        ScrollView {
+          LazyVStack(spacing: 2) {
+            ForEach(Array(model.soundSet.listOrder.enumerated()), id: \.element.id) {
+              index, tile in
+              ListRowView(
+                tile: tile,
+                number: index + 1,
+                state: model.state(of: tile),
+                isSelected: model.selectedTileID == tile.id,
+                model: model,
+                onEdit: { edit(tile) },
+                onDelete: { tilePendingDeletion = tile }
+              )
+            }
+          }
+          .padding(12)
+        }
       } else {
         ScrollView {
           LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(model.orderedTiles) { tile in
+            ForEach(model.soundSet.gridOrder) { tile in
               TileView(
                 tile: tile,
                 state: model.state(of: tile),
                 isSelected: model.selectedTileID == tile.id,
                 model: model,
-                onEdit: {
-                  model.selectedTileID = tile.id
-                  isInspectorPresented = true
-                },
+                onEdit: { edit(tile) },
                 onDelete: { tilePendingDeletion = tile }
               )
             }
@@ -66,6 +82,21 @@ struct BoardView: View {
       .inspectorColumnWidth(min: 260, ideal: 300)
     }
     .toolbar {
+      Picker(
+        "Display",
+        selection: Binding(
+          get: { model.soundSet.displayMode },
+          set: { model.setDisplayMode($0) }
+        )
+      ) {
+        Label("Grid", systemImage: "square.grid.3x3").tag(DisplayMode.grid)
+        Label("List", systemImage: "list.bullet").tag(DisplayMode.list)
+      }
+      .pickerStyle(.segmented)
+      .help("Show the set as a grid or a list")
+      Button("Set Options", systemImage: "slider.horizontal.3") { isSetOptionsPresented = true }
+        .help("What happens when a sound ends in list mode")
+        .popover(isPresented: $isSetOptionsPresented) { SetOptionsView(model: model) }
       MasterVolumeControl(model: model)
       Button("Fade Out All", systemImage: "speaker.wave.1") { model.fadeOutAll() }
         .keyboardShortcut("-", modifiers: [])
@@ -99,5 +130,10 @@ struct BoardView: View {
     } message: {
       Text(model.errorMessage ?? "")
     }
+  }
+
+  private func edit(_ tile: Tile) {
+    model.selectedTileID = tile.id
+    isInspectorPresented = true
   }
 }

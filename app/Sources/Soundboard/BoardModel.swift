@@ -47,16 +47,14 @@ final class BoardModel {
 
     engine.onVoiceFinished = { [weak self] tileID in
       self?.coordinator.voiceDidFinish(tileID)
+      self?.cueNext(after: tileID)
+    }
+    engine.onAdvancePoint = { [weak self] tileID, lead in
+      self?.advance(from: tileID, lead: lead)
     }
   }
 
   var soundSet: SoundSet { library.selectedSet }
-
-  var orderedTiles: [Tile] {
-    soundSet.tiles.sorted {
-      ($0.gridPosition.row, $0.gridPosition.column) < ($1.gridPosition.row, $1.gridPosition.column)
-    }
-  }
 
   func state(of tile: Tile) -> VoiceState? {
     coordinator.state(of: tile.id)
@@ -135,6 +133,7 @@ final class BoardModel {
         title: url.deletingPathExtension().lastPathComponent
       )
       tile.gridPosition = set.nextFreeGridPosition(columns: Self.gridColumns)
+      tile.listIndex = set.nextListIndex
       tile.color = TileColor.allCases[set.tiles.count % TileColor.allCases.count]
       do {
         try store.importSound(from: url, for: tile, in: set.id)
@@ -197,11 +196,19 @@ final class BoardModel {
 
   func press(_ tile: Tile, modifier: TriggerModifier) {
     selectedTileID = tile.id
-    perform(coordinator.press(tile, modifier: modifier))
+    perform(coordinator.press(tile, modifier: modifier, listMode: isInListMode(tile)))
   }
 
   func release(_ tile: Tile) {
-    perform(coordinator.release(tile))
+    perform(coordinator.release(tile, listMode: isInListMode(tile)))
+  }
+
+  /// Plays (or stops) the selected tile of the shown set, e.g. the one Cue next moved to.
+  func playSelection() {
+    guard let tile = selectedTile, soundSet.tiles.contains(where: { $0.id == tile.id }) else {
+      return
+    }
+    press(tile, modifier: .none)
   }
 
   func stopAll() {
@@ -215,10 +222,11 @@ final class BoardModel {
   private func perform(_ commands: [PlaybackCommand]) {
     for command in commands {
       switch command {
-      case .start(let tileID):
-        start(tileID)
+      case .start(let tileID, let fadeIn):
+        start(tileID, fadeIn: fadeIn)
       case .stop(let tileID, let fade):
         engine.stop(tileID, fade: fade)
+        cueNext(after: tileID)
       case .pause(let tileID):
         engine.pause(tileID)
       case .resume(let tileID):
@@ -227,7 +235,7 @@ final class BoardModel {
     }
   }
 
-  private func start(_ tileID: UUID) {
+  private func start(_ tileID: UUID, fadeIn: TimeInterval) {
     guard let set = library.set(containingTile: tileID),
       let tile = set.tiles.first(where: { $0.id == tileID }),
       let url = store?.soundURL(for: tile, in: set.id)
@@ -236,11 +244,73 @@ final class BoardModel {
       return
     }
     do {
-      try engine.start(tile, url: url)
+      try engine.start(
+        tile,
+        url: url,
+        fadeIn: fadeIn,
+        continuousCrossfade: set.continuousCrossfade
+      )
     } catch {
       coordinator.voiceDidFinish(tileID)
       errorMessage = "Couldn’t play “\(tile.title)”: \(error.localizedDescription)"
+      return
     }
+    var played = tile
+    played.lastPlayed = Date()
+    update(played)
+  }
+
+  private func isInListMode(_ tile: Tile) -> Bool {
+    library.set(containingTile: tile.id)?.displayMode == .list
+  }
+
+  /// Continuous: the tile reached its crossfade point, start the next one.
+  private func advance(from tileID: UUID, lead: TimeInterval) {
+    guard let set = library.set(containingTile: tileID),
+      let outgoing = set.tiles.first(where: { $0.id == tileID }),
+      let next = set.nextPlayableTile(after: tileID)
+    else { return }
+    let commands = coordinator.crossfade(from: outgoing, to: next, duration: lead)
+    guard !commands.isEmpty else { return }
+    selectedTileID = next.id
+    perform(commands)
+  }
+
+  /// Cue next: when a tile stops, select the following one without playing it.
+  private func cueNext(after tileID: UUID) {
+    guard let next = library.set(containingTile: tileID)?.tileToCue(afterStopping: tileID) else {
+      return
+    }
+    selectedTileID = next.id
+  }
+
+  // MARK: Set options
+
+  func setDisplayMode(_ mode: DisplayMode) {
+    updateShownSet { $0.displayMode = mode }
+  }
+
+  func setPlaybackMode(_ mode: PlaybackMode) {
+    updateShownSet { $0.playbackMode = mode }
+  }
+
+  func setCrossfadeDuration(_ duration: TimeInterval) {
+    updateShownSet { $0.crossfadeDuration = max(duration, 0) }
+  }
+
+  /// Clears the played marks of the shown set and selects its first playable tile.
+  func resetList() {
+    updateShownSet { set in
+      for index in set.tiles.indices { set.tiles[index].lastPlayed = nil }
+    }
+    selectedTileID = soundSet.firstPlayableTile?.id
+  }
+
+  private func updateShownSet(_ change: (inout SoundSet) -> Void) {
+    var set = soundSet
+    change(&set)
+    library.replace(set)
+    save(set)
   }
 
   // MARK: Persistence
