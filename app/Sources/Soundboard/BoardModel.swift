@@ -8,15 +8,29 @@ import UniformTypeIdentifiers
 final class BoardModel {
   static let gridColumns = 6
 
-  var soundSet = SoundSet(title: "Untitled Set")
+  var soundSet: SoundSet
   var errorMessage: String?
 
   private var coordinator = PlaybackCoordinator()
-  // Sets are not saved yet, so dropped files are played from where they are.
-  private var fileURLs: [UUID: URL] = [:]
+  @ObservationIgnored private let store: SetStore?
   @ObservationIgnored private let engine = AudioEngine()
 
   init() {
+    var store: SetStore?
+    var loaded: SoundSet?
+    var loadError: String?
+    do {
+      let library = SetStore(directory: try SetStore.defaultDirectory())
+      store = library
+      // Only one set until the sets sidebar exists.
+      loaded = try library.loadAll().first
+    } catch {
+      loadError = "Couldn’t open the sound library: \(error.localizedDescription)"
+    }
+    self.store = store
+    soundSet = loaded ?? SoundSet(title: "Untitled Set")
+    errorMessage = loadError
+
     engine.onVoiceFinished = { [weak self] tileID in
       self?.coordinator.voiceDidFinish(tileID)
     }
@@ -32,9 +46,13 @@ final class BoardModel {
     coordinator.state(of: tile.id)
   }
 
-  /// Adds one tile per audio file; returns false if none of the URLs were audio.
+  /// Adds one tile per audio file, copying it into the set; returns false if none were audio.
   @discardableResult
   func addFiles(_ urls: [URL]) -> Bool {
+    guard let store else {
+      errorMessage = "Sounds can’t be added because the sound library couldn’t be opened."
+      return false
+    }
     let audioURLs = urls.filter { url in
       (try? url.resourceValues(forKeys: [.contentTypeKey]).contentType)?.conforms(to: .audio)
         ?? false
@@ -51,9 +69,15 @@ final class BoardModel {
         row: index / Self.gridColumns
       )
       tile.color = TileColor.allCases[index % TileColor.allCases.count]
-      fileURLs[tile.fileID] = url
+      do {
+        try store.importSound(from: url, for: tile, in: soundSet.id)
+      } catch {
+        errorMessage = "Couldn’t add “\(tile.title)”: \(error.localizedDescription)"
+        continue
+      }
       soundSet.tiles.append(tile)
     }
+    save()
     return !audioURLs.isEmpty
   }
 
@@ -76,6 +100,15 @@ final class BoardModel {
   func update(_ tile: Tile) {
     guard let index = soundSet.tiles.firstIndex(where: { $0.id == tile.id }) else { return }
     soundSet.tiles[index] = tile
+    save()
+  }
+
+  private func save() {
+    do {
+      try store?.save(soundSet)
+    } catch {
+      errorMessage = "Couldn’t save “\(soundSet.title)”: \(error.localizedDescription)"
+    }
   }
 
   private func perform(_ commands: [PlaybackCommand]) {
@@ -95,7 +128,7 @@ final class BoardModel {
 
   private func start(_ tileID: UUID) {
     guard let tile = soundSet.tiles.first(where: { $0.id == tileID }),
-      let url = fileURLs[tile.fileID]
+      let url = store?.soundURL(for: tile, in: soundSet.id)
     else {
       coordinator.voiceDidFinish(tileID)
       return
