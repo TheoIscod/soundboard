@@ -1,0 +1,8 @@
+.cache/
+tools/
+# Thinned copies of Farrago binaries: proprietary, never commit.
+analysis/bin/
+.DS_Store
+# Raw REA Evidence can be hundreds of MB; keep only curated notes in git.
+analysis/evidence/
+.claude/settings.local.json

@@ -1,0 +1,42 @@
+{
+  "enabledMcpjsonServers": [
+    "rea"
+  ],
+  "env": {
+    "npm_config_cache": "/Users/theo/Documents/REA/.cache/npm",
+    "GHIDRA_INSTALL_DIR": "/Users/theo/Documents/REA/tools/ghidra_12.1.4_PUBLIC",
+    "JAVA_HOME": "/Users/theo/Documents/REA/tools/jdk-21.0.12.1+1/Contents/Home",
+    "GRADLE_USER_HOME": "/Users/theo/Documents/REA/.cache/gradle",
+    "REA_GHIDRA_STARTUP_TIMEOUT_MS": "1800000"
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npx -y rea-agents@6.4.0 inspect-plist:*)",
+      "Bash(npx -y rea-agents@6.4.0 inspect-macho:*)",
+      "Bash(npx -y rea-agents@6.4.0 inspect-signature:*)",
+      "Bash(npx -y rea-agents@6.4.0 inspect-artifact:*)",
+      "Bash(npx -y rea-agents@6.4.0 inspect-asset-catalog:*)",
+      "Bash(npx -y rea-agents@6.4.0 inspect-keyed-archive:*)",
+      "Bash(npx -y rea-agents@6.4.0 inspect-analysis-view:*)",
+      "Bash(npx -y rea-agents@6.4.0 decode-interface-builder:*)",
+      "Bash(npx -y rea-agents@6.4.0 demangle-swift:*)",
+      "Bash(npx -y rea-agents@6.4.0 capabilities:*)",
+      "Bash(npx -y rea-agents@6.4.0 --help)"
+    ],
+    "deny": [
+      "Bash(npx -y rea-agents@6.4.0 setup:*)",
+      "Bash(npx -y rea-agents@latest setup:*)",
+      "Bash(npx rea-agents setup:*)",
+      "Bash(npx -y rea-agents@6.4.0 uninstall:*)",
+      "Bash(npx -y rea-agents@6.4.0 update:*)",
+      "Bash(rea setup:*)",
+      "Bash(rea update:*)",
+      "Bash(rea uninstall:*)",
+      "Bash(npm install -g:*)",
+      "Bash(npm install --global:*)",
+      "Bash(npm i -g:*)",
+      "Bash(claude mcp add:*)",
+      "Bash(curl:* | bash)"
+    ]
+  }
+}
