@@ -12,6 +12,13 @@ final class AudioEngine {
   private var buffers: [BufferKey: AVAudioPCMBuffer] = [:]
   private var timer: Timer?
   private var lastTick = ProcessInfo.processInfo.systemUptime
+  private var master = LinearRamp(value: 1)
+
+  /// Ramps every sound to the new master gain over 0.2 s.
+  func setMasterGain(_ gain: Float) {
+    // With nothing sounding there is nothing to ramp, and the timer that advances ramps is off.
+    master.move(to: gain, over: voices.isEmpty ? 0 : LinearRamp.volumeChangeDuration)
+  }
 
   func start(_ tile: Tile, url: URL) throws {
     if voices[tile.id] != nil { removeVoice(tile.id) }
@@ -33,7 +40,7 @@ final class AudioEngine {
     ) { [weak self] _ in
       Task { @MainActor in self?.voiceReachedEnd(tile.id, voice: voice) }
     }
-    voice.player.volume = voice.gain
+    voice.player.volume = Gain.snapped(master.value * voice.gain)
     voice.player.play()
     voices[tile.id] = voice
     startTimerIfNeeded()
@@ -48,6 +55,17 @@ final class AudioEngine {
     }
     voice.fade.move(to: 0, over: fade)
     voice.stopsWhenSilent = true
+  }
+
+  /// Applies edited settings to a sounding tile; volume changes ramp over 0.2 s.
+  func update(_ tile: Tile) {
+    voices[tile.id]?.settings = tile.player
+  }
+
+  /// Length of the whole file, before trimming.
+  func duration(of url: URL) throws -> TimeInterval {
+    let file = try AVAudioFile(forReading: url)
+    return Double(file.length) / file.processingFormat.sampleRate
   }
 
   func pause(_ tileID: UUID) {
@@ -110,8 +128,10 @@ final class AudioEngine {
     let now = ProcessInfo.processInfo.systemUptime
     let elapsed = now - lastTick
     lastTick = now
+    master.advance(by: elapsed)
 
     for (tileID, voice) in voices {
+      voice.volume.advance(by: elapsed)
       voice.fade.advance(by: elapsed)
       if voice.stopsWhenSilent, voice.fade.isFinished {
         removeVoice(tileID)
@@ -119,7 +139,7 @@ final class AudioEngine {
         continue
       }
       voice.position = currentPosition(of: voice)
-      voice.player.volume = voice.gain
+      voice.player.volume = Gain.snapped(master.value * voice.gain)
     }
   }
 
@@ -129,7 +149,7 @@ final class AudioEngine {
       voice.length > 0
     else { return voice.position }
     let seconds = Double(playerTime.sampleTime) / playerTime.sampleRate
-    return voice.settings.loops ? seconds.truncatingRemainder(dividingBy: voice.length) : seconds
+    return voice.loops ? seconds.truncatingRemainder(dividingBy: voice.length) : seconds
   }
 }
 
@@ -152,8 +172,13 @@ private struct BufferKey: Hashable {
 @MainActor
 private final class Voice {
   let player = AVAudioPlayerNode()
-  let settings: PlayerSettings
+  /// Fades and volume follow edits live; trim and loop are fixed by the scheduled buffer.
+  var settings: PlayerSettings {
+    didSet { volume.move(to: Self.volume(for: settings), over: LinearRamp.volumeChangeDuration) }
+  }
+  let loops: Bool
   let length: TimeInterval
+  var volume: LinearRamp
   var fade = LinearRamp(value: 1)
   var stopsWhenSilent = false
   var position: TimeInterval = 0
@@ -161,16 +186,21 @@ private final class Voice {
   init(settings: PlayerSettings, length: TimeInterval) {
     self.settings = settings
     self.length = length
+    loops = settings.loops
+    volume = LinearRamp(value: Self.volume(for: settings))
+  }
+
+  private static func volume(for settings: PlayerSettings) -> Float {
+    settings.muted ? 0 : settings.activeVolume
   }
 
   var gain: Float {
-    let volume = settings.muted ? 0 : settings.activeVolume
     let envelope = Gain.envelope(
       at: position,
       length: length,
       fadeIn: settings.fadeInTime,
       fadeOut: settings.fadeOutTime
     )
-    return Gain.snapped(volume * fade.value * envelope)
+    return Gain.snapped(volume.value * fade.value * envelope)
   }
 }

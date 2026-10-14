@@ -5,7 +5,10 @@ import SwiftUI
 struct TileView: View {
   let tile: Tile
   let state: VoiceState?
+  let isSelected: Bool
   let model: BoardModel
+  let onEdit: () -> Void
+  let onDelete: () -> Void
 
   @State private var isPressed = false
 
@@ -29,6 +32,11 @@ struct TileView: View {
     .overlay {
       RoundedRectangle(cornerRadius: 10)
         .strokeBorder(.white, lineWidth: state == .playing ? 3 : 0)
+    }
+    .padding(3)
+    .overlay {
+      RoundedRectangle(cornerRadius: 12)
+        .strokeBorder(Color.accentColor, lineWidth: isSelected ? 2 : 0)
     }
     .scaleEffect(isPressed ? 0.96 : 1)
     .animation(.easeOut(duration: 0.1), value: isPressed)
@@ -78,6 +86,8 @@ struct TileView: View {
 
   @ViewBuilder
   private var contextMenu: some View {
+    Button("Edit…", action: onEdit)
+    Divider()
     Toggle("Loop", isOn: binding(\.player.loops))
     Toggle("Solo", isOn: binding(\.solo))
     Toggle("Hold to Play", isOn: binding(\.holdToPlay))
@@ -87,17 +97,12 @@ struct TileView: View {
         Text(color.displayName).tag(color)
       }
     }
+    Divider()
+    Button("Delete…", role: .destructive, action: onDelete)
   }
 
   private func binding<Value>(_ keyPath: WritableKeyPath<Tile, Value>) -> Binding<Value> {
-    Binding(
-      get: { tile[keyPath: keyPath] },
-      set: { newValue in
-        var updated = tile
-        updated[keyPath: keyPath] = newValue
-        model.update(updated)
-      }
-    )
+    model.binding(for: tile, keyPath)
   }
 }
 

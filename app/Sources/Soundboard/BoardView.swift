@@ -4,6 +4,8 @@ import SwiftUI
 struct BoardView: View {
   @Bindable var model: BoardModel
   @State private var isDropTargeted = false
+  @State private var isInspectorPresented = false
+  @State private var tilePendingDeletion: Tile?
 
   private let columns = Array(
     repeating: GridItem(.flexible(), spacing: 10),
@@ -22,7 +24,17 @@ struct BoardView: View {
         ScrollView {
           LazyVGrid(columns: columns, spacing: 10) {
             ForEach(model.orderedTiles) { tile in
-              TileView(tile: tile, state: model.state(of: tile), model: model)
+              TileView(
+                tile: tile,
+                state: model.state(of: tile),
+                isSelected: model.selectedTileID == tile.id,
+                model: model,
+                onEdit: {
+                  model.selectedTileID = tile.id
+                  isInspectorPresented = true
+                },
+                onDelete: { tilePendingDeletion = tile }
+              )
             }
           }
           .padding(12)
@@ -43,11 +55,38 @@ struct BoardView: View {
       isDropTargeted = $0
     }
     .navigationTitle(model.soundSet.title)
+    .inspector(isPresented: $isInspectorPresented) {
+      Group {
+        if let tile = model.selectedTile {
+          TileInspector(tile: tile, model: model) { tilePendingDeletion = tile }
+        } else {
+          ContentUnavailableView("No Tile Selected", systemImage: "square.dashed")
+        }
+      }
+      .inspectorColumnWidth(min: 260, ideal: 300)
+    }
     .toolbar {
+      MasterVolumeControl(model: model)
       Button("Fade Out All", systemImage: "speaker.wave.1") { model.fadeOutAll() }
         .keyboardShortcut("-", modifiers: [])
       Button("Stop All", systemImage: "stop.fill") { model.stopAll() }
         .keyboardShortcut(.escape, modifiers: [])
+      Button("Inspector", systemImage: "sidebar.trailing") { isInspectorPresented.toggle() }
+        .keyboardShortcut("i", modifiers: .command)
+    }
+    .confirmationDialog(
+      "Delete “\(tilePendingDeletion?.title ?? "")”?",
+      isPresented: Binding(
+        get: { tilePendingDeletion != nil },
+        set: { if !$0 { tilePendingDeletion = nil } }
+      )
+    ) {
+      Button("Delete Tile", role: .destructive) {
+        if let tile = tilePendingDeletion { model.deleteTile(tile) }
+        tilePendingDeletion = nil
+      }
+    } message: {
+      Text("The copy of its sound in this set will be removed. This can’t be undone.")
     }
     .alert(
       "Playback error",

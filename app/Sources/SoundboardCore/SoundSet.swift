@@ -91,4 +91,15 @@ public struct SoundSet: Codable, Sendable, Equatable, Identifiable {
   public init(title: String) {
     self.title = title
   }
+
+  /// First empty cell in reading order, so deleted tiles leave a gap that new tiles fill.
+  public func nextFreeGridPosition(columns: Int) -> GridPosition {
+    let taken = Set(tiles.map(\.gridPosition))
+    var index = 0
+    while true {
+      let position = GridPosition(column: index % columns, row: index / columns)
+      if !taken.contains(position) { return position }
+      index += 1
+    }
+  }
 }

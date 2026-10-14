@@ -41,6 +41,23 @@ private func makeStore() -> SetStore {
   #expect(try Data(contentsOf: copy) == Data("audio".utf8))
 }
 
+@Test func removedSoundDeletesOnlyThatCopy() throws {
+  let store = makeStore()
+  let set = SoundSet(title: "Effects")
+  let kept = Tile(fileID: UUID(), originalFileName: "Kept.m4a", title: "Kept")
+  let removed = Tile(fileID: UUID(), originalFileName: "Removed.m4a", title: "Removed")
+  let source = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).m4a")
+  try Data("audio".utf8).write(to: source)
+  try store.importSound(from: source, for: kept, in: set.id)
+  try store.importSound(from: source, for: removed, in: set.id)
+
+  try store.removeSound(for: removed, in: set.id)
+  try store.removeSound(for: removed, in: set.id)
+
+  #expect(!FileManager.default.fileExists(atPath: store.soundURL(for: removed, in: set.id).path))
+  #expect(FileManager.default.fileExists(atPath: store.soundURL(for: kept, in: set.id).path))
+}
+
 @Test func deletedSetIsGoneWithItsSounds() throws {
   let store = makeStore()
   let set = SoundSet(title: "Effects")
