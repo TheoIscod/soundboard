@@ -36,6 +36,13 @@ public struct SetStore: Sendable {
     try encoder.encode(set).write(to: package.appending(path: "Set.plist"), options: .atomic)
   }
 
+  /// Deletes the set's package, including its copied sounds.
+  public func delete(_ setID: UUID) throws {
+    let package = packageURL(for: setID)
+    guard FileManager.default.fileExists(atPath: package.path) else { return }
+    try FileManager.default.removeItem(at: package)
+  }
+
   /// Copies an audio file into the set's package so the set no longer depends on the original.
   public func importSound(from source: URL, for tile: Tile, in setID: UUID) throws {
     let destination = soundURL(for: tile, in: setID)
