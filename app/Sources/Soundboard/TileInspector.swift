@@ -7,9 +7,6 @@ struct TileInspector: View {
   let model: BoardModel
   let onDelete: () -> Void
 
-  /// Keeps at least this much sound between the two trim points.
-  private static let minimumPlayableLength: TimeInterval = 0.1
-
   var body: some View {
     Form {
       Section("Tile") {
@@ -63,27 +60,19 @@ struct TileInspector: View {
       }
 
       if let duration = model.duration(of: tile) {
-        Section("Fades") {
-          secondsSlider("Fade in", value: binding(\.player.fadeInTime), upTo: duration / 2)
-          secondsSlider("Fade out", value: binding(\.player.fadeOutTime), upTo: duration / 2)
-        }
-
         Section {
-          secondsSlider(
-            "Start",
-            value: binding(\.player.trimStart),
-            upTo: max(duration - tile.player.trimEnd - Self.minimumPlayableLength, 0)
-          )
-          secondsSlider(
-            "End",
-            value: binding(\.player.trimEnd),
-            upTo: max(duration - tile.player.trimStart - Self.minimumPlayableLength, 0)
-          )
+          WaveformEditor(tile: tile, duration: duration, model: model)
+          LabeledContent("Start", value: Self.format(tile.player.trimStart))
+          LabeledContent("End", value: Self.format(duration - tile.player.trimEnd))
+          LabeledContent("Fade in", value: Self.format(tile.player.fadeInTime))
+          LabeledContent("Fade out", value: Self.format(tile.player.fadeOutTime))
         } header: {
-          Text("Trim")
+          Text("Trim & Fades")
         } footer: {
           Text(
-            "Sound length \(Self.format(duration)). Trim and Loop apply the next time it starts.")
+            "Drag the bars to trim and the yellow dots to set the fades. "
+              + "Sound length \(Self.format(duration)). Trim and Loop apply the next time it starts."
+          )
         }
       } else {
         Section {
@@ -114,22 +103,6 @@ struct TileInspector: View {
         Text(value.wrappedValue, format: .percent.precision(.fractionLength(0)))
           .monospacedDigit()
           .frame(width: 44, alignment: .trailing)
-      }
-    }
-  }
-
-  private func secondsSlider(
-    _ label: String,
-    value: Binding<TimeInterval>,
-    upTo limit: TimeInterval
-  ) -> some View {
-    LabeledContent(label) {
-      HStack {
-        Slider(value: value, in: 0...max(limit, 0.01))
-          .disabled(limit <= 0)
-        Text(Self.format(value.wrappedValue))
-          .monospacedDigit()
-          .frame(width: 52, alignment: .trailing)
       }
     }
   }

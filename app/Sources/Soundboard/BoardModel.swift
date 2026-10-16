@@ -26,6 +26,8 @@ final class BoardModel {
   @ObservationIgnored private let store: SetStore?
   @ObservationIgnored private let engine = AudioEngine()
   @ObservationIgnored private var durations: [UUID: TimeInterval] = [:]
+  /// Waveform peaks by sound file, loaded on demand by the editor.
+  private(set) var waveforms: [UUID: [WaveformPeak]] = [:]
 
   init() {
     var store: SetStore?
@@ -190,6 +192,27 @@ final class BoardModel {
     else { return nil }
     durations[tile.fileID] = duration
     return duration
+  }
+
+  /// Loads the tile's waveform once, off the main actor.
+  func loadWaveform(for tile: Tile) async {
+    guard waveforms[tile.fileID] == nil,
+      let set = library.set(containingTile: tile.id),
+      let url = store?.soundURL(for: tile, in: set.id)
+    else { return }
+    do {
+      let peaks = try await Task.detached(priority: .userInitiated) {
+        try WaveformLoader.peaks(of: url)
+      }.value
+      waveforms[tile.fileID] = peaks
+    } catch {
+      errorMessage = "Couldn’t draw the waveform of “\(tile.title)”: \(error.localizedDescription)"
+    }
+  }
+
+  /// Where playback is, in seconds into the whole file, while the tile sounds.
+  func playbackPosition(of tile: Tile) -> TimeInterval? {
+    engine.position(of: tile.id).map { tile.player.trimStart + $0 }
   }
 
   // MARK: Playback

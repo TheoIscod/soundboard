@@ -79,6 +79,11 @@ final class AudioEngine {
     voices[tile.id]?.settings = tile.player
   }
 
+  /// Seconds played since the tile's trimmed start, while it sounds.
+  func position(of tileID: UUID) -> TimeInterval? {
+    voices[tileID]?.position
+  }
+
   /// Length of the whole file, before trimming.
   func duration(of url: URL) throws -> TimeInterval {
     let file = try AVAudioFile(forReading: url)
