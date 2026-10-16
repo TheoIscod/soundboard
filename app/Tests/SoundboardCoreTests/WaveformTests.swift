@@ -72,3 +72,14 @@ import Testing
   #expect(Waveform.columns(of: peaks, from: 0.5, to: 1, count: 4).map(\.high) == [4, 5, 6, 7])
   #expect(Waveform.columns(of: peaks, from: 0, to: 0.25, count: 4).map(\.high) == [0, 0, 1, 1])
 }
+
+@Test func waveformFilesRoundTripAndRejectAnythingElse() {
+  let peaks = [WaveformPeak(low: -0.5, high: 0.25), WaveformPeak(low: 0, high: 1)]
+  let data = WaveformFile.encode(peaks)
+
+  #expect(data.count == 12 + 2 * 8)
+  #expect(WaveformFile.decode(data) == peaks)
+  #expect(WaveformFile.decode(data.dropLast()) == nil)
+  #expect(WaveformFile.decode(Data("XXXX".utf8) + data.dropFirst(4)) == nil)
+  #expect(WaveformFile.decode(Data()) == nil)
+}

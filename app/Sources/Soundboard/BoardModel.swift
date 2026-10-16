@@ -2,11 +2,16 @@ import Foundation
 import Observation
 import SoundboardCore
 import UniformTypeIdentifiers
+import os
 
 @MainActor
 @Observable
 final class BoardModel {
   static let gridColumns = 6
+  private nonisolated static let log = Logger(
+    subsystem: "io.github.theoiscod.soundboard",
+    category: "waveform"
+  )
   private static let selectedSetKey = "selectedSetID"
   private static let masterVolumeKey = "masterVolume"
 
@@ -307,37 +312,45 @@ final class BoardModel {
 
   /// Loads the tile's waveform once, off the main actor.
   func loadWaveform(for tile: Tile) async {
-    guard waveforms[tile.fileID] == nil,
-      let set = library.set(containingTile: tile.id),
-      let url = store?.soundURL(for: tile, in: set.id)
-    else { return }
-    do {
-      let peaks = try await Task.detached(priority: .userInitiated) {
-        try WaveformLoader.peaks(of: url)
-      }.value
+    guard waveforms[tile.fileID] == nil else { return }
+    if let peaks = await peaks(for: tile, binCount: WaveformLoader.binCount) {
       waveforms[tile.fileID] = peaks
-    } catch {
-      errorMessage =
-        "Impossible d’afficher la forme d’onde de « \(tile.title) » : \(error.localizedDescription)"
     }
   }
 
   /// Loads the editor's fine waveform once, off the main actor.
   func loadEditorWaveform(for tile: Tile) async {
-    guard editorWaveforms[tile.fileID] == nil,
-      let set = library.set(containingTile: tile.id),
-      let url = store?.soundURL(for: tile, in: set.id),
-      let duration = duration(of: tile)
-    else { return }
+    guard editorWaveforms[tile.fileID] == nil, let duration = duration(of: tile) else { return }
     let bins = WaveformLoader.editorBinCount(forDuration: duration)
-    do {
-      let peaks = try await Task.detached(priority: .userInitiated) {
-        try WaveformLoader.peaks(of: url, binCount: bins)
-      }.value
+    if let peaks = await peaks(for: tile, binCount: bins) {
       editorWaveforms[tile.fileID] = peaks
+    }
+  }
+
+  /// The tile's peaks at this resolution: read from the set package when saved there,
+  /// otherwise computed from the sound and saved for the next launch. Runs off the main actor.
+  private func peaks(for tile: Tile, binCount: Int) async -> [WaveformPeak]? {
+    guard let store, let set = library.set(containingTile: tile.id) else { return nil }
+    let setID = set.id
+    let url = store.soundURL(for: tile, in: setID)
+    do {
+      return try await Task.detached(priority: .userInitiated) {
+        if let saved = store.savedWaveform(for: tile, in: setID, binCount: binCount) {
+          return saved
+        }
+        let peaks = try WaveformLoader.peaks(of: url, binCount: binCount)
+        do {
+          try store.saveWaveform(peaks, for: tile, in: setID, binCount: binCount)
+        } catch {
+          // Not saving only costs recomputing at the next launch; the waveform still shows.
+          Self.log.error("Waveform not saved: \(error.localizedDescription, privacy: .public)")
+        }
+        return peaks
+      }.value
     } catch {
       errorMessage =
         "Impossible d’afficher la forme d’onde de « \(tile.title) » : \(error.localizedDescription)"
+      return nil
     }
   }
 

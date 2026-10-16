@@ -83,3 +83,18 @@ private func makeStore() -> SetStore {
     try store.loadAll()
   }
 }
+
+@Test func savedWaveformsAreFoundByResolutionAndRemovedWithTheSound() throws {
+  let store = makeStore()
+  let set = SoundSet(title: "Effects")
+  let tile = Tile(fileID: UUID(), originalFileName: "Bark.m4a", title: "Bark")
+  let peaks = [WaveformPeak(low: -1, high: 1)]
+
+  #expect(store.savedWaveform(for: tile, in: set.id, binCount: 600) == nil)
+  try store.saveWaveform(peaks, for: tile, in: set.id, binCount: 600)
+  #expect(store.savedWaveform(for: tile, in: set.id, binCount: 600) == peaks)
+  #expect(store.savedWaveform(for: tile, in: set.id, binCount: 1200) == nil)
+
+  try store.removeSound(for: tile, in: set.id)
+  #expect(store.savedWaveform(for: tile, in: set.id, binCount: 600) == nil)
+}

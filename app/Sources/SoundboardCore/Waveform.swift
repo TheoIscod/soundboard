@@ -118,3 +118,47 @@ public struct TrimEditor: Sendable {
     min(max(value, low), high)
   }
 }
+
+/// On-disk form of waveform peaks: "SBWF", a format version, the bin count, then each bin's
+/// low and high as little-endian Float32.
+public enum WaveformFile {
+  private static let magic = Array("SBWF".utf8)
+  private static let version: UInt32 = 1
+
+  public static func encode(_ peaks: [WaveformPeak]) -> Data {
+    var data = Data(magic)
+    append(version, to: &data)
+    append(UInt32(peaks.count), to: &data)
+    for peak in peaks {
+      append(peak.low.bitPattern, to: &data)
+      append(peak.high.bitPattern, to: &data)
+    }
+    return data
+  }
+
+  /// Nil for anything not written by `encode` in this version, so a damaged or outdated file
+  /// is just computed again.
+  public static func decode(_ data: Data) -> [WaveformPeak]? {
+    let bytes = [UInt8](data)
+    guard bytes.count >= 12, Array(bytes[0..<4]) == magic, word(bytes, at: 4) == version else {
+      return nil
+    }
+    let count = Int(word(bytes, at: 8))
+    guard bytes.count == 12 + count * 8 else { return nil }
+    return (0..<count).map { index in
+      let offset = 12 + index * 8
+      return WaveformPeak(
+        low: Float(bitPattern: word(bytes, at: offset)),
+        high: Float(bitPattern: word(bytes, at: offset + 4))
+      )
+    }
+  }
+
+  private static func append(_ value: UInt32, to data: inout Data) {
+    withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) }
+  }
+
+  private static func word(_ bytes: [UInt8], at offset: Int) -> UInt32 {
+    (0..<4).reduce(UInt32(0)) { $0 | UInt32(bytes[offset + $1]) << (8 * $1) }
+  }
+}
