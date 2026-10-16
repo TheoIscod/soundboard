@@ -6,6 +6,7 @@ struct SoundboardApp: App {
   @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
   @State private var model = BoardModel()
   @State private var keyboard = KeyboardMonitor()
+  @State private var midi = MIDIInput()
 
   init() {
     // Launched from `swift run` there is no app bundle, so macOS would
@@ -34,6 +35,7 @@ struct SoundboardApp: App {
       }
       .onAppear {
         keyboard.install(model: model)
+        midi.install(model: model)
         appDelegate.openHandler = { [model] urls in model.openSets(urls) }
       }
     }
@@ -54,6 +56,17 @@ struct SoundboardApp: App {
         Button("Baisser le volume général") { model.master.stepDown() }
           .keyboardShortcut(.downArrow, modifiers: .command)
         Toggle("Tout couper", isOn: $model.master.muted)
+      }
+      CommandMenu("MIDI") {
+        Button("Apprendre le MIDI") { model.startMIDILearn() }
+          .keyboardShortcut("l", modifiers: .command)
+          .disabled(model.selectedTile == nil)
+        Button("Annuler l’apprentissage") { model.cancelMIDILearn() }
+          .disabled(model.midiLearningTileID == nil)
+        Button("Effacer le MIDI") {
+          if let tile = model.selectedTile { model.clearMIDI(for: tile) }
+        }
+        .disabled(model.selectedTile?.midiTrigger == nil)
       }
       CommandMenu("Set") {
         Button("Nouveau set") { model.addSet() }

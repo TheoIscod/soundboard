@@ -35,6 +35,7 @@ struct ListRowView: View {
         Image(systemName: "repeat").foregroundStyle(.secondary)
       }
       if let hotkey = tile.hotkey { HotkeyBadge(key: hotkey) }
+      if let note = tile.midiTrigger { HotkeyBadge(key: "♪ \(note.noteName)") }
       VoiceStateIndicator(state: state)
         .foregroundStyle(Color.accentColor)
         .frame(width: 18)

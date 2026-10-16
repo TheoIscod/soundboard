@@ -56,6 +56,8 @@ public struct Tile: Codable, Sendable, Equatable, Identifiable {
   /// Key that plays the tile while its set is shown; see `Hotkey`. Optional so sets saved
   /// before hotkeys existed still decode.
   public var hotkey: String?
+  /// Controller note that plays the tile while its set is shown. Optional for older sets.
+  public var midiTrigger: MIDINote?
   public var gridPosition = GridPosition(column: 0, row: 0)
   public var listIndex = 0
   public var player = PlayerSettings()

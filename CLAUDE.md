@@ -105,6 +105,15 @@ Farrago; only run them when explicitly asked.
   is ready. A `.soundset` whose set id is already in the library is shown, not
   duplicated; `.farragoset` is always imported. Import Set… always copies. The
   app is the owner of `.soundset` and only an alternate handler of `.farragoset`.
+- **MIDI** (`MIDIInput`, CoreMIDI, no dependency): listens to every source and
+  reconnects on setup changes. A tile's `midiTrigger` (channel + note) is set by
+  MIDI learn (⌘L) and, like hotkeys, works for the shown set only. Note-on plays
+  with velocity/127 as a gain factor, note-off releases Hold to Play tiles.
+  CoreMIDI callbacks are created in `nonisolated` functions: closures formed in
+  main-actor code would be inferred main-actor isolated and trap on CoreMIDI's
+  threads. End-to-end check without hardware: a virtual source script plus
+  `/usr/bin/log stream --level debug --predicate 'subsystem ==
+  "io.github.theoiscod.soundboard"'` shows the connected sources and notes.
 - **Icon is drawn by `scripts/make-icon.swift`**, our own design; the generated
   `.icns` is committed so bundling doesn't need to redraw it.
 - **Own document format**: `SoundSet` is `Codable` with its own
