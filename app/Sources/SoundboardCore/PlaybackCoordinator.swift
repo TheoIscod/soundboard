@@ -24,6 +24,14 @@ public enum PlaybackCommand: Sendable, Equatable {
   case resume(UUID)
 }
 
+extension PlaybackCommand {
+  public var tileID: UUID {
+    switch self {
+    case .start(let id, _, _), .stop(let id, _), .pause(let id), .resume(let id): id
+    }
+  }
+}
+
 /// Decides what happens when tiles are triggered; the audio engine only executes the commands.
 public struct PlaybackCoordinator: Sendable {
   public private(set) var states: [UUID: VoiceState] = [:]
