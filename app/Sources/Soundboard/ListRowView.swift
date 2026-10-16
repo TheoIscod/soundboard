@@ -75,7 +75,7 @@ struct ListRowView: View {
 
   /// Length once trimmed, as m:ss.
   private var playLength: String {
-    guard let duration = model.duration(of: tile) else { return "–:––" }
+    guard let duration = model.knownDuration(of: tile) else { return "–:––" }
     let seconds = Int(max(duration - tile.player.trimStart - tile.player.trimEnd, 0).rounded())
     return "\(seconds / 60):" + String(format: "%02d", seconds % 60)
   }

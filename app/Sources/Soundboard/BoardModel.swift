@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import Observation
 import SoundboardCore
@@ -38,6 +39,12 @@ final class BoardModel {
   /// Lights controller pads while their tiles play; its destination is chosen in Settings.
   let midiOutput = MIDIOutput()
   @ObservationIgnored private var durations: [UUID: TimeInterval] = [:]
+  /// Bumped when durations read in the background arrive, so list rows show them.
+  private var durationsVersion = 0
+  /// Sets changed but not yet written: saves are grouped so dragging a slider or
+  /// triggering tiles quickly doesn't rewrite the set's plist each time.
+  @ObservationIgnored private var pendingSaves: [UUID: SoundSet] = [:]
+  @ObservationIgnored private var saveTask: Task<Void, Never>?
   /// Waveform peaks by sound file, loaded on demand by the editor.
   private(set) var waveforms: [UUID: [WaveformPeak]] = [:]
   /// Finer waveforms for the editor window, by sound file.
@@ -60,7 +67,13 @@ final class BoardModel {
         .map { URL(fileURLWithPath: $0, isDirectory: true) } ?? SetStore.defaultDirectory()
       let library = SetStore(directory: directory)
       store = library
-      loaded = try library.loadAll()
+      let contents = try library.loadAll()
+      loaded = contents.sets
+      if !contents.unreadable.isEmpty {
+        loadError =
+          "Certains sets n’ont pas pu être lus et ne sont pas affichés :\n"
+          + contents.unreadable.joined(separator: "\n")
+      }
     } catch {
       loadError = "Impossible d’ouvrir la bibliothèque de sons : \(error.localizedDescription)"
     }
@@ -81,6 +94,8 @@ final class BoardModel {
       self?.sendPlayingFeedback(for: [tileID])
     }
     osc.onCommand = { [weak self] command in self?.handleOSC(command) }
+    engine.onStartFailed = { [weak self] tileID, error in self?.startFailed(tileID, error) }
+    prefetchDurations()
     engine.onAdvancePoint = { [weak self] tileID, lead in
       self?.advance(from: tileID, lead: lead)
     }
@@ -133,12 +148,13 @@ final class BoardModel {
 
   func deleteSet(_ id: UUID) {
     guard let set = library.set(withID: id) else { return }
-    // Sounds of a deleted set must not keep playing from files that are gone.
-    for tile in set.tiles where coordinator.state(of: tile.id) != nil {
-      engine.stop(tile.id, fade: nil)
-      coordinator.voiceDidFinish(tile.id)
-    }
+    guard canDeleteSet() else { return }
+    // Sounds of a deleted set must not keep playing from files that are gone; going through
+    // perform() also turns their pads and OSC buttons off.
+    for tile in set.tiles { perform(coordinator.stop(tile.id, fade: nil)) }
     guard library.removeSet(id) else { return }
+    // A pending save would write the deleted set back.
+    pendingSaves[id] = nil
     rememberSelection()
     do {
       try store?.delete(id)
@@ -149,6 +165,7 @@ final class BoardModel {
 
   /// Copies the shown set (plist and sounds) to a `.soundset` package at `destination`.
   func exportShownSet(to destination: URL) {
+    flushSaves()
     do {
       guard let store else { throw BoardModelError.libraryUnavailable }
       try store.export(soundSet, to: destination)
@@ -283,10 +300,7 @@ final class BoardModel {
   /// Removes the tile and its copied sound, stopping it first if it plays.
   func deleteTile(_ tile: Tile) {
     guard var set = library.set(containingTile: tile.id) else { return }
-    if coordinator.state(of: tile.id) != nil {
-      engine.stop(tile.id, fade: nil)
-      coordinator.voiceDidFinish(tile.id)
-    }
+    perform(coordinator.stop(tile.id, fade: nil))
     set.tiles.removeAll { $0.id == tile.id }
     library.replace(set)
     if selectedTileID == tile.id { selectedTileID = nil }
@@ -299,7 +313,38 @@ final class BoardModel {
     }
   }
 
-  /// Length of the tile's whole sound file, or nil if it can't be read.
+  /// Length of the tile's sound if already known, without reading the file: for views that
+  /// show many tiles. Durations of the shown set are read in the background.
+  func knownDuration(of tile: Tile) -> TimeInterval? {
+    _ = durationsVersion
+    return durations[tile.fileID]
+  }
+
+  /// Reads the lengths of the shown set's sounds off the main actor.
+  private func prefetchDurations() {
+    guard let store else { return }
+    let missing = shownSet.tiles.compactMap { tile -> (UUID, URL)? in
+      guard durations[tile.fileID] == nil, let set = library.set(containingTile: tile.id)
+      else { return nil }
+      return (tile.fileID, store.soundURL(for: tile, in: set.id))
+    }
+    guard !missing.isEmpty else { return }
+    Task { [weak self] in
+      let found = await Task.detached(priority: .utility) {
+        missing.compactMap { fileID, url -> (UUID, TimeInterval)? in
+          // Unreadable files are reported where they are used (inspector, playback).
+          guard let file = try? AVAudioFile(forReading: url) else { return nil }
+          return (fileID, Double(file.length) / file.processingFormat.sampleRate)
+        }
+      }.value
+      guard let self else { return }
+      for (fileID, duration) in found { self.durations[fileID] = duration }
+      self.durationsVersion += 1
+    }
+  }
+
+  /// Length of the tile's whole sound file, or nil if it can't be read. Reads the file when
+  /// not known yet: fine for one tile (inspector, editor), use `knownDuration` for many.
   func duration(of tile: Tile) -> TimeInterval? {
     if let cached = durations[tile.fileID] { return cached }
     guard let set = library.set(containingTile: tile.id),
@@ -368,13 +413,9 @@ final class BoardModel {
     voice.player.loops = false
     voice.player.fadeInTime = 0
     voice.player.fadeOutTime = 0
-    do {
-      try engine.start(voice, url: url)
-      previewStart = range.start
-      isPreviewing = true
-    } catch {
-      errorMessage = "Impossible d’écouter « \(tile.title) » : \(error.localizedDescription)"
-    }
+    engine.start(voice, url: url, cached: false)
+    previewStart = range.start
+    isPreviewing = true
   }
 
   func stopPreview() {
@@ -670,22 +711,27 @@ final class BoardModel {
       coordinator.voiceDidFinish(tileID)
       return
     }
-    do {
-      try engine.start(
-        tile,
-        url: url,
-        fadeIn: fadeIn,
-        velocity: velocity,
-        continuousCrossfade: set.continuousCrossfade
-      )
-    } catch {
-      coordinator.voiceDidFinish(tileID)
-      errorMessage = "Impossible de lire « \(tile.title) » : \(error.localizedDescription)"
-      return
-    }
+    engine.start(
+      tile,
+      url: url,
+      fadeIn: fadeIn,
+      velocity: velocity,
+      continuousCrossfade: set.continuousCrossfade
+    )
     var played = tile
     played.lastPlayed = Date()
     update(played)
+  }
+
+  private func startFailed(_ voiceID: UUID, _ error: any Error) {
+    if voiceID == previewVoiceID {
+      isPreviewing = false
+    } else {
+      coordinator.voiceDidFinish(voiceID)
+      sendPlayingFeedback(for: [voiceID])
+    }
+    let title = tile(withID: voiceID)?.title ?? "ce son"
+    errorMessage = "Impossible de lire « \(title) » : \(error.localizedDescription)"
   }
 
   /// Hold to Play tiles start on mouse-down; every other tile on mouse-up.
@@ -783,11 +829,30 @@ final class BoardModel {
 
   // MARK: Persistence
 
+  /// Writes the set shortly, grouping quick successive changes into one write.
   private func save(_ set: SoundSet) {
-    do {
-      try store?.save(set)
-    } catch {
-      errorMessage = "Impossible d’enregistrer « \(set.title) » : \(error.localizedDescription)"
+    pendingSaves[set.id] = set
+    guard saveTask == nil else { return }
+    saveTask = Task { [weak self] in
+      // Cancelled only by flushSaves(), which writes everything itself.
+      try? await Task.sleep(for: .milliseconds(500))
+      guard !Task.isCancelled else { return }
+      self?.flushSaves()
+    }
+  }
+
+  /// Writes every pending set now; also called when the app quits.
+  func flushSaves() {
+    saveTask?.cancel()
+    saveTask = nil
+    let sets = pendingSaves.values
+    pendingSaves = [:]
+    for set in sets {
+      do {
+        try store?.save(set)
+      } catch {
+        errorMessage = "Impossible d’enregistrer « \(set.title) » : \(error.localizedDescription)"
+      }
     }
   }
 
@@ -811,6 +876,7 @@ final class BoardModel {
   private func rememberSelection() {
     UserDefaults.standard.set(library.selectedSetID.uuidString, forKey: Self.selectedSetKey)
     refreshMIDILights()
+    prefetchDurations()
   }
 }
 

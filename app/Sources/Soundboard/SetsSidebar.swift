@@ -68,7 +68,7 @@ struct SetsSidebar: View {
       } icon: {
         Image(systemName: set.isSmart ? "gearshape.fill" : "square.grid.3x3.fill")
       }
-      .badge(model.library.shownSet(set, gridColumns: BoardModel.gridColumns).tiles.count)
+      .badge(model.library.tileCount(of: set))
       .onTapGesture(count: 2) { beginRenaming(set) }
     }
   }

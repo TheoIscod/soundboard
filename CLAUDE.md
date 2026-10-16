@@ -167,6 +167,17 @@ Farrago; only run them when explicitly asked.
   ignoring case and accents; query values are percent-decoded once more because
   `open` double-encodes links typed with raw accents. `farrago://` is not claimed.
   Check: `open -g "soundboard://…"` against a throwaway library with OSC feedback on.
+- **Engine performance**: `AudioEngine.start` decodes uncached regions off the main
+  actor (`DecodedRegion`) and starts when ready; failures arrive via `onStartFailed`.
+  Decoded regions live in an LRU `BufferCache` (256 MB); editor previews bypass it.
+  The gain timer runs in `.common` run-loop modes so fades don't freeze while a menu
+  is open or a slider is dragged. Looping sounds fade in on the first pass only.
+- **Saves are grouped**: `BoardModel.save` writes after 0.5 s; `flushSaves()` runs on
+  quit (`AppDelegate.applicationWillTerminate`) and before export; deleting a set
+  drops its pending save. List rows use `knownDuration` (prefetched off-main).
+- **Untrusted packages**: imported `.soundset`/`.farragoset` must not contain symbolic
+  links (refused / treated as missing); `loadAll` skips and reports unreadable sets;
+  OSC bundles nest at most 8 levels.
 - **Icon is drawn by `scripts/make-icon.swift`**, our own design; the generated
   `.icns` is committed so bundling doesn't need to redraw it.
 - **Own document format**: `SoundSet` is `Codable` with its own

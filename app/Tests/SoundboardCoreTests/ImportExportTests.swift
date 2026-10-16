@@ -49,7 +49,7 @@ private func writeSound(_ text: String, to url: URL) throws {
   #expect(first.tiles[0].title == "Bark")
   #expect(
     try Data(contentsOf: store.soundURL(for: first.tiles[0], in: first.id)) == Data("bark".utf8))
-  #expect(try store.loadAll().count == 3)
+  #expect(try store.loadAll().sets.count == 3)
 }
 
 @Test func exportedPackageKeepsTheSetIDForOpening() throws {
@@ -127,4 +127,49 @@ private func writeSound(_ text: String, to url: URL) throws {
   #expect(throws: FarragoImportError.notASoundSet("Other.farragoset")) {
     try FarragoImport.read(package: package) { _, _ in 0 }
   }
+}
+
+@Test func packagesWithSymbolicLinksAreRefused() throws {
+  let package = temporaryDirectory("Export").appending(path: "Trap.soundset")
+  let set = SoundSet(title: "Trap")
+  try FileManager.default.createDirectory(
+    at: package.appending(path: "Sounds"),
+    withIntermediateDirectories: true
+  )
+  try PropertyListEncoder().encode(set).write(to: package.appending(path: "Set.plist"))
+  let secret = temporaryDirectory("Secret").appending(path: "secret.txt")
+  try writeSound("secret", to: secret)
+  try FileManager.default.createSymbolicLink(
+    at: package.appending(path: "Sounds/\(UUID().uuidString).m4a"),
+    withDestinationURL: secret
+  )
+  let store = SetStore(directory: temporaryDirectory("Library"))
+
+  #expect(throws: SetStoreError.self) { try store.importPackage(at: package) }
+}
+
+@Test func farragoSoundsThatAreSymbolicLinksCountAsMissing() throws {
+  let package = temporaryDirectory("Farrago").appending(path: "Trap.farragoset")
+  let fileID = UUID()
+  let secret = temporaryDirectory("Secret").appending(path: "secret.txt")
+  try writeSound("secret", to: secret)
+  try FileManager.default.createDirectory(
+    at: package.appending(path: "Sound Files"),
+    withIntermediateDirectories: true
+  )
+  try FileManager.default.createSymbolicLink(
+    at: package.appending(path: "Sound Files/\(fileID.uuidString).m4a"),
+    withDestinationURL: secret
+  )
+  let plist: [String: Any] = [
+    "type": "Farrago.FGTileSet", "title": "Trap",
+    "tiles": [["fileUUID": fileID.uuidString, "title": "Secret"]],
+  ]
+  try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
+    .write(to: package.appending(path: "Sound Set Data.plist"))
+
+  let imported = try FarragoImport.read(package: package) { _, _ in 0 }
+
+  #expect(imported.set.tiles.isEmpty)
+  #expect(imported.skippedTileTitles == ["Secret"])
 }

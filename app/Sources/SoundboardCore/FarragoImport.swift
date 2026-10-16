@@ -43,6 +43,8 @@ public struct FarragoImport: Sendable {
       guard let fileID = (entry["fileUUID"] as? String).flatMap(UUID.init(uuidString:)),
         let source = available.first(where: {
           $0.deletingPathExtension().lastPathComponent == fileID.uuidString
+            // A symbolic link could point at any file of the Mac: treated as missing.
+            && (try? $0.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true
         })
       else {
         skipped.append(title)

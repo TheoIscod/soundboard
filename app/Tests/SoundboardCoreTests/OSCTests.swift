@@ -78,3 +78,13 @@ extension OSCCommand {
     return false
   }
 }
+
+@Test func deeplyNestedBundlesAreRefused() {
+  var packet = OSCMessage(address: "/transport/stopAll").encoded()
+  for _ in 0..<12 {
+    packet =
+      Data("#bundle".utf8) + [0] + Data(count: 8)
+      + withUnsafeBytes(of: Int32(packet.count).bigEndian) { Data($0) } + packet
+  }
+  #expect(OSCMessage.decodePacket(packet).isEmpty)
+}
