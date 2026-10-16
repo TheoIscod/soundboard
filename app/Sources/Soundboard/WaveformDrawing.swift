@@ -72,8 +72,9 @@ struct Playhead: View {
 /// monitor, which lets events through unless the pointer is over the view.
 @MainActor
 final class WaveformScrollMonitor {
-  /// Pointer position over the view and the view's width; nil when the pointer is elsewhere.
-  var pointer: (x: CGFloat, width: CGFloat)?
+  /// Pointer position over the view, the view's width and its window number; nil when the
+  /// pointer is elsewhere.
+  var pointer: (x: CGFloat, width: CGFloat, window: Int)?
   private var monitor: Any?
 
   func start(
@@ -83,7 +84,11 @@ final class WaveformScrollMonitor {
     stop()
     monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .magnify]) {
       [weak self] event in
-      guard let pointer = self?.pointer, pointer.width > 0 else { return event }
+      // The hover exit doesn't come when a window opens over the view without the mouse
+      // moving, so events aimed at another window go through.
+      guard let pointer = self?.pointer, pointer.width > 0,
+        event.window?.windowNumber == pointer.window
+      else { return event }
       let fraction = Double(pointer.x / pointer.width)
       if event.type == .magnify {
         zoom(1 + Double(event.magnification), fraction)
@@ -100,6 +105,11 @@ final class WaveformScrollMonitor {
       }
       return nil
     }
+  }
+
+  /// The window under the pointer, read while the view reports it hovered.
+  static func windowUnderPointer() -> Int {
+    NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0)
   }
 
   func stop() {

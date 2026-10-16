@@ -94,6 +94,8 @@ struct TileInspector: View {
       if let duration = model.duration(of: tile) {
         Section {
           WaveformEditor(tile: tile, duration: duration, model: model)
+            // A drag in progress belongs to this tile, not the next one selected.
+            .id(tile.id)
           Button("Ouvrir l’éditeur complet…") { openWindow(id: EditorWindow.id, value: tile.id) }
           LabeledContent("Début", value: Self.format(tile.player.trimStart))
           LabeledContent("Fin", value: Self.format(duration - tile.player.trimEnd))
