@@ -55,13 +55,15 @@ public struct SetStore: Sendable {
   public func importPackage(at source: URL) throws -> SoundSet {
     let original = try load(from: source)
     let set = original.withFreshIdentifiers()
-    let sounds = source.appending(path: "Sounds", directoryHint: .isDirectory)
     let package = packageURL(for: set.id)
     try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
-    if FileManager.default.fileExists(atPath: sounds.path) {
+    // Waveforms only depend on the sounds, which keep their ids, so they come along.
+    for folder in ["Sounds", "Waveforms"] {
+      let source = source.appending(path: folder, directoryHint: .isDirectory)
+      guard FileManager.default.fileExists(atPath: source.path) else { continue }
       try FileManager.default.copyItem(
-        at: sounds,
-        to: package.appending(path: "Sounds", directoryHint: .isDirectory)
+        at: source,
+        to: package.appending(path: folder, directoryHint: .isDirectory)
       )
     }
     try save(set)
@@ -88,8 +90,48 @@ public struct SetStore: Sendable {
   /// Deletes the copy of a tile's sound; a copy that is already gone is not an error.
   public func removeSound(for tile: Tile, in setID: UUID) throws {
     let url = soundURL(for: tile, in: setID)
-    guard FileManager.default.fileExists(atPath: url.path) else { return }
-    try FileManager.default.removeItem(at: url)
+    if FileManager.default.fileExists(atPath: url.path) {
+      try FileManager.default.removeItem(at: url)
+    }
+    try removeWaveforms(for: tile, in: setID)
+  }
+
+  /// Peaks saved for the tile's sound at this resolution, or nil if there are none (or they
+  /// can't be read): the sound file never changes, so its id is enough to find them.
+  public func savedWaveform(for tile: Tile, in setID: UUID, binCount: Int) -> [WaveformPeak]? {
+    guard let data = try? Data(contentsOf: waveformURL(for: tile, in: setID, binCount: binCount))
+    else { return nil }
+    return WaveformFile.decode(data)
+  }
+
+  public func saveWaveform(
+    _ peaks: [WaveformPeak],
+    for tile: Tile,
+    in setID: UUID,
+    binCount: Int
+  ) throws {
+    let url = waveformURL(for: tile, in: setID, binCount: binCount)
+    try FileManager.default.createDirectory(
+      at: url.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    try WaveformFile.encode(peaks).write(to: url, options: .atomic)
+  }
+
+  private func removeWaveforms(for tile: Tile, in setID: UUID) throws {
+    let folder = packageURL(for: setID).appending(path: "Waveforms", directoryHint: .isDirectory)
+    guard FileManager.default.fileExists(atPath: folder.path) else { return }
+    for file in try FileManager.default.contentsOfDirectory(
+      at: folder,
+      includingPropertiesForKeys: nil
+    ) where file.lastPathComponent.hasPrefix(tile.fileID.uuidString) {
+      try FileManager.default.removeItem(at: file)
+    }
+  }
+
+  private func waveformURL(for tile: Tile, in setID: UUID, binCount: Int) -> URL {
+    packageURL(for: setID)
+      .appending(path: "Waveforms/\(tile.fileID.uuidString)-\(binCount).peaks")
   }
 
   public func soundURL(for tile: Tile, in setID: UUID) -> URL {

@@ -154,6 +154,11 @@ Farrago; only run them when explicitly asked.
   schedule bumps `Voice.schedule` so the completion of a replaced schedule (fired by
   `stop()`) doesn't end the voice. Completion closures stored in variables must be
   declared `@Sendable` or they are main-actor isolated and trap on the audio thread.
+- **Saved waveforms**: peaks are stored in the set package as
+  `Waveforms/<fileID>-<binCount>.peaks` (`WaveformFile`: "SBWF", version, count,
+  Float32 pairs), like Farrago's `Metadata/` waveform. The copied sound never
+  changes, so the file id is the cache key (no hash). Unreadable or outdated files
+  are recomputed; removing a sound removes its waveforms; imports copy them.
 - **Icon is drawn by `scripts/make-icon.swift`**, our own design; the generated
   `.icns` is committed so bundling doesn't need to redraw it.
 - **Own document format**: `SoundSet` is `Codable` with its own
