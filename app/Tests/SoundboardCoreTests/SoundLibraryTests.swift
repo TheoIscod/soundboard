@@ -6,7 +6,7 @@ import Testing
 @Test func emptyLibraryStartsWithOneUntitledSet() {
   let library = SoundLibrary(sets: [])
 
-  #expect(library.sets.map(\.title) == ["Untitled Set"])
+  #expect(library.sets.map(\.title) == ["Set sans titre"])
   #expect(library.selectedSet.id == library.sets[0].id)
 }
 
@@ -26,8 +26,8 @@ import Testing
   let second = library.addSet()
   let third = library.addSet()
 
-  #expect(second.title == "Untitled Set 2")
-  #expect(third.title == "Untitled Set 3")
+  #expect(second.title == "Set sans titre 2")
+  #expect(third.title == "Set sans titre 3")
   #expect(library.selectedSetID == third.id)
 }
 

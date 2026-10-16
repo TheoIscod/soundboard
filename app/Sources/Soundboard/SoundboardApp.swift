@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct SoundboardApp: App {
+  @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
   @State private var model = BoardModel()
   @State private var keyboard = KeyboardMonitor()
 
@@ -19,44 +20,60 @@ struct SoundboardApp: App {
       } detail: {
         BoardView(model: model)
       }
-      .onAppear { keyboard.install(model: model) }
+      // On the split view rather than the board, so it gets its own full-height column
+      // and the board's toolbar stops at its edge instead of running over it.
+      .inspector(isPresented: $model.isInspectorPresented) {
+        Group {
+          if let tile = model.selectedTile {
+            TileInspector(tile: tile, model: model) { model.tilePendingDeletion = tile }
+          } else {
+            ContentUnavailableView("Aucune tuile sélectionnée", systemImage: "square.dashed")
+          }
+        }
+        .inspectorColumnWidth(min: 260, ideal: 300)
+      }
+      .onAppear {
+        keyboard.install(model: model)
+        appDelegate.openHandler = { [model] urls in model.openSets(urls) }
+      }
     }
     .commands {
-      CommandMenu("Playback") {
+      CommandMenu("Lecture") {
         // Farrago also accepts plain Return; ⌃Return can't clash with confirming a text field.
-        Button("Play Selection") { model.playSelection() }
+        Button("Jouer la sélection") { model.playSelection() }
           .keyboardShortcut(.return, modifiers: .control)
-        Button("Reset List") { model.resetList() }
+        Button("Réinitialiser la liste") { model.resetList() }
           .keyboardShortcut("r", modifiers: .command)
         Divider()
-        Button("Fade to Volume \(model.master.usesVolumeB ? "A" : "B")") {
+        Button("Fondu vers le volume \(model.master.usesVolumeB ? "A" : "B")") {
           model.master.toggleAB()
         }
         .keyboardShortcut("d", modifiers: [.command, .shift])
-        Button("Master Volume Up") { model.master.stepUp() }
+        Button("Monter le volume général") { model.master.stepUp() }
           .keyboardShortcut(.upArrow, modifiers: .command)
-        Button("Master Volume Down") { model.master.stepDown() }
+        Button("Baisser le volume général") { model.master.stepDown() }
           .keyboardShortcut(.downArrow, modifiers: .command)
-        Toggle("Mute", isOn: $model.master.muted)
+        Toggle("Tout couper", isOn: $model.master.muted)
       }
-      CommandMenu("Sound Set") {
-        Button("New Set") { model.addSet() }
+      CommandMenu("Set") {
+        Button("Nouveau set") { model.addSet() }
           .keyboardShortcut("n", modifiers: [.command, .shift])
-        Button(model.soundSet.displayMode == .list ? "Switch to Grid Mode" : "Switch to List Mode")
-        {
+        Button(
+          model.soundSet.displayMode == .list ? "Passer en mode grille" : "Passer en mode liste"
+        ) {
           model.setDisplayMode(model.soundSet.displayMode == .list ? .grid : .list)
         }
         Divider()
-        Button("Import Set…") { model.importSets(from: SetFiles.chooseSetsToImport()) }
-        Button("Export Set…") {
+        Button("Importer des sets…") { model.importSets(from: SetFiles.chooseSetsToImport()) }
+        Button("Exporter le set…") {
           if let destination = SetFiles.chooseExportDestination(for: model.soundSet) {
             model.exportShownSet(to: destination)
           }
         }
         Divider()
-        Button("Select Previous Set") { model.selectPreviousSet() }
+        Button("Set précédent") { model.selectPreviousSet() }
           .keyboardShortcut("[", modifiers: [.command, .shift])
-        Button("Select Next Set") { model.selectNextSet() }
+        Button("Set suivant") { model.selectNextSet() }
           .keyboardShortcut("]", modifiers: [.command, .shift])
       }
     }

@@ -52,6 +52,20 @@ private func writeSound(_ text: String, to url: URL) throws {
   #expect(try store.loadAll().count == 3)
 }
 
+@Test func exportedPackageKeepsTheSetIDForOpening() throws {
+  let store = SetStore(directory: temporaryDirectory("Library"))
+  let set = SoundSet(title: "Effects")
+  let exported = temporaryDirectory("Export").appending(path: "Effects.soundset")
+  try FileManager.default.createDirectory(
+    at: exported.deletingLastPathComponent(),
+    withIntermediateDirectories: true
+  )
+
+  try store.export(set, to: exported)
+
+  #expect(try store.setID(ofPackage: exported) == set.id)
+}
+
 @Test func farragoSetMapsSettingsAndSkipsTilesWithoutSound() throws {
   let package = temporaryDirectory("Farrago").appending(path: "Show.farragoset")
   let fileID = UUID()

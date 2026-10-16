@@ -100,6 +100,11 @@ Farrago; only run them when explicitly asked.
   executable, which needs `setActivationPolicy(.regular)` for a Dock icon.
   Preferences (master volume, shown set) live under the bundle id, separate from
   the bare executable's `Soundboard` domain; the set library is shared.
+- **Opening a set** (Finder double-click, Open With, Dock, drop on the board) goes
+  through `AppDelegate.application(_:open:)`, which buffers URLs until the board
+  is ready. A `.soundset` whose set id is already in the library is shown, not
+  duplicated; `.farragoset` is always imported. Import Set… always copies. The
+  app is the owner of `.soundset` and only an alternate handler of `.farragoset`.
 - **Icon is drawn by `scripts/make-icon.swift`**, our own design; the generated
   `.icns` is committed so bundling doesn't need to redraw it.
 - **Own document format**: `SoundSet` is `Codable` with its own

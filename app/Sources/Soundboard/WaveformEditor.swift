@@ -44,7 +44,7 @@ struct WaveformEditor: View {
     .clipShape(RoundedRectangle(cornerRadius: 6))
     .task(id: tile.fileID) { await model.loadWaveform(for: tile) }
     .accessibilityElement()
-    .accessibilityLabel("Waveform with trim and fades")
+    .accessibilityLabel("Forme d’onde avec découpe et fondus")
   }
 
   // MARK: Drawing
@@ -68,7 +68,7 @@ struct WaveformEditor: View {
       }
     } else {
       context.draw(
-        Text("Loading…").foregroundStyle(.secondary), at: CGPoint(x: size.width / 2, y: middle))
+        Text("Chargement…").foregroundStyle(.secondary), at: CGPoint(x: size.width / 2, y: middle))
     }
 
     // Dim what the trim cuts away.

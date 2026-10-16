@@ -20,6 +20,9 @@ final class BoardModel {
   }
   /// Tile shown in the inspector.
   var selectedTileID: UUID?
+  var isInspectorPresented = false
+  /// Tile waiting for the user to confirm its deletion.
+  var tilePendingDeletion: Tile?
   var errorMessage: String?
 
   private var coordinator = PlaybackCoordinator()
@@ -38,7 +41,7 @@ final class BoardModel {
       store = library
       loaded = try library.loadAll()
     } catch {
-      loadError = "Couldn’t open the sound library: \(error.localizedDescription)"
+      loadError = "Impossible d’ouvrir la bibliothèque de sons : \(error.localizedDescription)"
     }
     self.store = store
     let remembered = UserDefaults.standard.string(forKey: Self.selectedSetKey).flatMap(UUID.init)
@@ -109,7 +112,7 @@ final class BoardModel {
     do {
       try store?.delete(id)
     } catch {
-      errorMessage = "Couldn’t delete “\(set.title)”: \(error.localizedDescription)"
+      errorMessage = "Impossible de supprimer « \(set.title) » : \(error.localizedDescription)"
     }
   }
 
@@ -119,13 +122,19 @@ final class BoardModel {
       guard let store else { throw BoardModelError.libraryUnavailable }
       try store.export(soundSet, to: destination)
     } catch {
-      errorMessage = "Couldn’t export “\(soundSet.title)”: \(error.localizedDescription)"
+      errorMessage = "Impossible d’exporter « \(soundSet.title) » : \(error.localizedDescription)"
     }
+  }
+
+  /// Opens sets from Finder, the Dock or a drop: a `.soundset` already in the library is shown
+  /// instead of being duplicated; anything else is imported.
+  func openSets(_ urls: [URL]) {
+    importSets(from: urls, reusingSetsInLibrary: true)
   }
 
   /// Adds `.soundset` packages and Farrago `.farragoset` sets to the library and shows the
   /// last one imported. Problems are reported once all packages have been tried.
-  func importSets(from urls: [URL]) {
+  func importSets(from urls: [URL], reusingSetsInLibrary: Bool = false) {
     var problems: [String] = []
     for url in urls {
       let name = url.lastPathComponent
@@ -134,38 +143,54 @@ final class BoardModel {
         let set: SoundSet
         switch url.pathExtension.lowercased() {
         case SetStore.packageExtension:
+          if reusingSetsInLibrary,
+            let existing = library.set(withID: try store.setID(ofPackage: url))
+          {
+            selectSet(existing.id)
+            continue
+          }
           set = try store.importPackage(at: url)
         case "farragoset":
           let imported = try FarragoImport.read(package: url, packetDuration: SetFiles.seconds)
           set = try store.add(imported)
           if !imported.skippedTileTitles.isEmpty {
             problems.append(
-              "\(name): sounds missing for \(imported.skippedTileTitles.joined(separator: ", "))"
+              "\(name) : sons manquants pour \(imported.skippedTileTitles.joined(separator: ", "))"
             )
           }
         default:
-          problems.append("\(name): not a .soundset or .farragoset")
+          problems.append("\(name) : ni un .soundset ni un .farragoset")
           continue
         }
         library.add(set)
         rememberSelection()
       } catch {
-        problems.append("\(name): \(error.localizedDescription)")
+        problems.append("\(name) : \(error.localizedDescription)")
       }
     }
     if !problems.isEmpty {
-      errorMessage = "Some sets couldn’t be fully imported.\n" + problems.joined(separator: "\n")
+      errorMessage =
+        "Certains sets n’ont pas pu être importés entièrement.\n" + problems.joined(separator: "\n")
     }
   }
 
   // MARK: Tiles
+
+  /// Handles files dropped on the board: sets are opened, audio files become tiles.
+  func drop(_ urls: [URL]) -> Bool {
+    let sets = urls.filter { SetFiles.isSetPackage($0) }
+    if !sets.isEmpty { openSets(sets) }
+    let others = urls.filter { !SetFiles.isSetPackage($0) }
+    let addedSounds = !others.isEmpty && addFiles(others)
+    return addedSounds || !sets.isEmpty
+  }
 
   /// Adds one tile per audio file to the shown set, copying the file into it;
   /// returns false if none were audio.
   @discardableResult
   func addFiles(_ urls: [URL]) -> Bool {
     guard let store else {
-      errorMessage = "Sounds can’t be added because the sound library couldn’t be opened."
+      errorMessage = "Impossible d’ajouter des sons : la bibliothèque n’a pas pu être ouverte."
       return false
     }
     let audioURLs = urls.filter { url in
@@ -185,7 +210,7 @@ final class BoardModel {
       do {
         try store.importSound(from: url, for: tile, in: set.id)
       } catch {
-        errorMessage = "Couldn’t add “\(tile.title)”: \(error.localizedDescription)"
+        errorMessage = "Impossible d’ajouter « \(tile.title) » : \(error.localizedDescription)"
         continue
       }
       set.tiles.append(tile)
@@ -224,7 +249,8 @@ final class BoardModel {
     do {
       try store?.removeSound(for: tile, in: set.id)
     } catch {
-      errorMessage = "Couldn’t remove the sound of “\(tile.title)”: \(error.localizedDescription)"
+      errorMessage =
+        "Impossible de supprimer le son de « \(tile.title) » : \(error.localizedDescription)"
     }
   }
 
@@ -251,7 +277,8 @@ final class BoardModel {
       }.value
       waveforms[tile.fileID] = peaks
     } catch {
-      errorMessage = "Couldn’t draw the waveform of “\(tile.title)”: \(error.localizedDescription)"
+      errorMessage =
+        "Impossible d’afficher la forme d’onde de « \(tile.title) » : \(error.localizedDescription)"
     }
   }
 
@@ -343,7 +370,7 @@ final class BoardModel {
       )
     } catch {
       coordinator.voiceDidFinish(tileID)
-      errorMessage = "Couldn’t play “\(tile.title)”: \(error.localizedDescription)"
+      errorMessage = "Impossible de lire « \(tile.title) » : \(error.localizedDescription)"
       return
     }
     var played = tile
@@ -424,7 +451,7 @@ final class BoardModel {
     do {
       try store?.save(set)
     } catch {
-      errorMessage = "Couldn’t save “\(set.title)”: \(error.localizedDescription)"
+      errorMessage = "Impossible d’enregistrer « \(set.title) » : \(error.localizedDescription)"
     }
   }
 
@@ -432,7 +459,7 @@ final class BoardModel {
     do {
       UserDefaults.standard.set(try JSONEncoder().encode(master), forKey: Self.masterVolumeKey)
     } catch {
-      errorMessage = "Couldn’t save the master volume: \(error.localizedDescription)"
+      errorMessage = "Impossible d’enregistrer le volume général : \(error.localizedDescription)"
     }
   }
 
@@ -454,7 +481,7 @@ enum BoardModelError: LocalizedError {
 
   var errorDescription: String? {
     switch self {
-    case .libraryUnavailable: "The sound library couldn’t be opened."
+    case .libraryUnavailable: "La bibliothèque de sons n’a pas pu être ouverte."
     }
   }
 }

@@ -7,18 +7,18 @@ struct MasterVolumeControl: View {
 
   var body: some View {
     HStack(spacing: 8) {
-      Picker("Master preset", selection: $model.master.usesVolumeB) {
+      Picker("Préréglage du volume général", selection: $model.master.usesVolumeB) {
         Text("A").tag(false)
         Text("B").tag(true)
       }
       .pickerStyle(.segmented)
       .labelsHidden()
       .fixedSize()
-      .help("Master volume preset (⇧⌘D switches)")
+      .help("Préréglage du volume général (⇧⌘D pour basculer)")
 
       Slider(value: $model.master.activeVolume, in: 0...1)
         .frame(width: 110)
-        .help("Master volume \(model.master.usesVolumeB ? "B" : "A") (⌘↑ / ⌘↓)")
+        .help("Volume général \(model.master.usesVolumeB ? "B" : "A") (⌘↑ / ⌘↓)")
 
       Text(model.master.activeVolume, format: .percent.precision(.fractionLength(0)))
         .monospacedDigit()
@@ -28,7 +28,7 @@ struct MasterVolumeControl: View {
         Image(systemName: model.master.muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
       }
       .toggleStyle(.button)
-      .help("Mute everything")
+      .help("Tout couper")
     }
   }
 }
