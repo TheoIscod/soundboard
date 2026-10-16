@@ -114,6 +114,13 @@ Farrago; only run them when explicitly asked.
   threads. End-to-end check without hardware: a virtual source script plus
   `/usr/bin/log stream --level debug --predicate 'subsystem ==
   "io.github.theoiscod.soundboard"'` shows the connected sources and notes.
+- **OSC** (`OSCService`, Network framework, UDP): off by default, enabled in the
+  Settings window (⌘,) so macOS only asks for local network access when wanted.
+  Addresses follow the scheme found in Farrago's binary (`/set/<n>/tile/<x>/<y>/…`,
+  `/master/…`, `/transport/…`; the per-tile action list is partly inferred). Tiles
+  are addressed by sidebar index and grid cell. Feedback `…/play 1|0` goes to the
+  output address. End-to-end check: enable `oscInputEnabled`/`oscOutputEnabled` in
+  the bundle's defaults, send UDP packets to 8080 and listen on 8081.
 - **Icon is drawn by `scripts/make-icon.swift`**, our own design; the generated
   `.icns` is committed so bundling doesn't need to redraw it.
 - **Own document format**: `SoundSet` is `Codable` with its own

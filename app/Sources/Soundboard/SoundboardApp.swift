@@ -90,5 +90,9 @@ struct SoundboardApp: App {
           .keyboardShortcut("]", modifiers: [.command, .shift])
       }
     }
+
+    Settings {
+      OSCSettingsView(osc: model.osc)
+    }
   }
 }

@@ -28,6 +28,8 @@ final class BoardModel {
   private var coordinator = PlaybackCoordinator()
   @ObservationIgnored private let store: SetStore?
   @ObservationIgnored private let engine = AudioEngine()
+  /// OSC remote control and feedback; its settings are edited in the Settings window.
+  let osc = OSCService()
   @ObservationIgnored private var durations: [UUID: TimeInterval] = [:]
   /// Waveform peaks by sound file, loaded on demand by the editor.
   private(set) var waveforms: [UUID: [WaveformPeak]] = [:]
@@ -53,7 +55,9 @@ final class BoardModel {
     engine.onVoiceFinished = { [weak self] tileID in
       self?.coordinator.voiceDidFinish(tileID)
       self?.cueNext(after: tileID)
+      self?.sendPlayingFeedback(for: [tileID])
     }
+    osc.onCommand = { [weak self] command in self?.handleOSC(command) }
     engine.onAdvancePoint = { [weak self] tileID, lead in
       self?.advance(from: tileID, lead: lead)
     }
@@ -332,6 +336,69 @@ final class BoardModel {
     return true
   }
 
+  // MARK: OSC
+
+  /// Runs a command received over OSC; tiles are found by set position and grid cell.
+  func handleOSC(_ command: OSCCommand) {
+    switch command {
+    case .tile(let reference, let position, let action, let pressed):
+      let set: SoundSet?
+      switch reference {
+      case .selected: set = soundSet
+      case .index(let index): set = library.sets.indices.contains(index) ? library.sets[index] : nil
+      }
+      guard let tile = set?.tile(at: position) else { return }
+      perform(action, on: tile, pressed: pressed)
+    case .masterToggleAB: master.toggleAB()
+    case .masterSelectVolumeA: master.usesVolumeB = false
+    case .masterSelectVolumeB: master.usesVolumeB = true
+    case .masterVolumeUp: master.stepUp()
+    case .masterVolumeDown: master.stepDown()
+    case .masterVolume(let volume): master.activeVolume = volume
+    case .playPauseAll: togglePauseAll()
+    case .stopAll: stopAll()
+    }
+  }
+
+  private func perform(_ action: OSCCommand.TileAction, on tile: Tile, pressed: Bool) {
+    if action == .play {
+      if pressed { press(tile, modifier: .none) } else { release(tile) }
+      return
+    }
+    guard pressed else { return }
+    var updated = tile
+    switch action {
+    case .play: return
+    case .fade:
+      // Fades a playing tile out; an idle tile has nothing to fade.
+      if coordinator.state(of: tile.id) != nil { press(tile, modifier: .fade) }
+      return
+    case .loop: updated.player.loops.toggle()
+    case .mute: updated.player.muted.toggle()
+    case .solo: updated.solo.toggle()
+    case .toggleAB: updated.player.usesVolumeB.toggle()
+    }
+    update(updated)
+  }
+
+  /// Tells the OSC controller which of these tiles play, so it can light their buttons.
+  private func sendPlayingFeedback(for tileIDs: [UUID]) {
+    guard osc.outputEnabled else { return }
+    for tileID in Set(tileIDs) {
+      guard let set = library.set(containingTile: tileID),
+        let setIndex = library.sets.firstIndex(where: { $0.id == set.id }),
+        let tile = set.tiles.first(where: { $0.id == tileID })
+      else { continue }
+      osc.send(
+        OSCCommand.playingFeedback(
+          setIndex: setIndex,
+          position: tile.gridPosition,
+          isPlaying: coordinator.state(of: tileID) == .playing
+        )
+      )
+    }
+  }
+
   // MARK: MIDI
 
   /// Tile waiting for the next note played on a controller (MIDI learn).
@@ -394,6 +461,7 @@ final class BoardModel {
   }
 
   private func perform(_ commands: [PlaybackCommand]) {
+    defer { sendPlayingFeedback(for: commands.map(\.tileID)) }
     for command in commands {
       switch command {
       case .start(let tileID, let fadeIn, let velocity):
