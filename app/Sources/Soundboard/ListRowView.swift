@@ -9,7 +9,7 @@ struct ListRowView: View {
   let isSelected: Bool
   let model: BoardModel
   let onEdit: () -> Void
-  let onDelete: () -> Void
+  let onDelete: (() -> Void)?
   /// Release point, in `BoardSpace`, of a drag that moves this tile.
   let onDrop: (CGPoint) -> Void
 

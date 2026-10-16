@@ -26,12 +26,26 @@ struct SoundboardApp: App {
       .inspector(isPresented: $model.isInspectorPresented) {
         Group {
           if let tile = model.selectedTile {
-            TileInspector(tile: tile, model: model) { model.tilePendingDeletion = tile }
+            TileInspector(
+              tile: tile,
+              model: model,
+              onDelete: model.soundSet.isSmart ? nil : { model.tilePendingDeletion = tile }
+            )
           } else {
             ContentUnavailableView("Aucune tuile sélectionnée", systemImage: "square.dashed")
           }
         }
         .inspectorColumnWidth(min: 260, ideal: 300)
+      }
+      .sheet(
+        isPresented: Binding(
+          get: { model.rulesEditorSetID != nil },
+          set: { if !$0 { model.rulesEditorSetID = nil } }
+        )
+      ) {
+        if let id = model.rulesEditorSetID, let set = model.library.set(withID: id) {
+          SmartRulesEditor(set: set, model: model)
+        }
       }
       .onAppear {
         keyboard.install(model: model)
@@ -71,6 +85,10 @@ struct SoundboardApp: App {
       CommandMenu("Set") {
         Button("Nouveau set") { model.addSet() }
           .keyboardShortcut("n", modifiers: [.command, .shift])
+        Button("Nouveau smart set") { model.addSmartSet() }
+          .keyboardShortcut("n", modifiers: [.command, .option])
+        Button("Modifier les règles…") { model.rulesEditorSetID = model.soundSet.id }
+          .disabled(!model.soundSet.isSmart)
         Button(
           model.soundSet.displayMode == .list ? "Passer en mode grille" : "Passer en mode liste"
         ) {

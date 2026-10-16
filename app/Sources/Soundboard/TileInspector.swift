@@ -5,7 +5,8 @@ import SwiftUI
 struct TileInspector: View {
   let tile: Tile
   let model: BoardModel
-  let onDelete: () -> Void
+  /// Nil hides Delete, for tiles shown in a smart set.
+  let onDelete: (() -> Void)?
 
   var body: some View {
     Form {
@@ -72,6 +73,7 @@ struct TileInspector: View {
       Section("Lecture") {
         Toggle("Activée", isOn: binding(\.isEnabled))
         Toggle("Boucle", isOn: binding(\.player.loops))
+        Toggle("Favori", isOn: binding(\.isFavorite))
         Toggle("Solo", isOn: binding(\.solo))
         Toggle("Maintenir pour jouer", isOn: binding(\.holdToPlay))
       }
@@ -110,8 +112,10 @@ struct TileInspector: View {
         }
       }
 
-      Section {
-        Button("Supprimer la tuile…", role: .destructive, action: onDelete)
+      if let onDelete {
+        Section {
+          Button("Supprimer la tuile…", role: .destructive, action: onDelete)
+        }
       }
     }
     .formStyle(.grouped)
