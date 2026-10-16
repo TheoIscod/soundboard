@@ -150,6 +150,15 @@ public struct SoundSet: Codable, Sendable, Equatable, Identifiable {
     min(max(crossfade, 0), max(soundLength, 0) / 2)
   }
 
+  /// The same set under a new set id and new tile ids. Sound file ids are kept because
+  /// they only name files inside the set's own package.
+  public func withFreshIdentifiers() -> SoundSet {
+    var copy = self
+    copy.id = UUID()
+    for index in copy.tiles.indices { copy.tiles[index].id = UUID() }
+    return copy
+  }
+
   /// Moves a tile to `index` in the current display order and renumbers that order only:
   /// list moves rewrite list indices, grid moves rewrite grid cells (packing any gaps).
   public mutating func moveTile(_ tileID: UUID, to index: Int, gridColumns: Int) {

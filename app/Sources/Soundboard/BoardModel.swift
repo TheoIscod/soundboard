@@ -113,6 +113,51 @@ final class BoardModel {
     }
   }
 
+  /// Copies the shown set (plist and sounds) to a `.soundset` package at `destination`.
+  func exportShownSet(to destination: URL) {
+    do {
+      guard let store else { throw BoardModelError.libraryUnavailable }
+      try store.export(soundSet, to: destination)
+    } catch {
+      errorMessage = "Couldn’t export “\(soundSet.title)”: \(error.localizedDescription)"
+    }
+  }
+
+  /// Adds `.soundset` packages and Farrago `.farragoset` sets to the library and shows the
+  /// last one imported. Problems are reported once all packages have been tried.
+  func importSets(from urls: [URL]) {
+    var problems: [String] = []
+    for url in urls {
+      let name = url.lastPathComponent
+      do {
+        guard let store else { throw BoardModelError.libraryUnavailable }
+        let set: SoundSet
+        switch url.pathExtension.lowercased() {
+        case SetStore.packageExtension:
+          set = try store.importPackage(at: url)
+        case "farragoset":
+          let imported = try FarragoImport.read(package: url, packetDuration: SetFiles.seconds)
+          set = try store.add(imported)
+          if !imported.skippedTileTitles.isEmpty {
+            problems.append(
+              "\(name): sounds missing for \(imported.skippedTileTitles.joined(separator: ", "))"
+            )
+          }
+        default:
+          problems.append("\(name): not a .soundset or .farragoset")
+          continue
+        }
+        library.add(set)
+        rememberSelection()
+      } catch {
+        problems.append("\(name): \(error.localizedDescription)")
+      }
+    }
+    if !problems.isEmpty {
+      errorMessage = "Some sets couldn’t be fully imported.\n" + problems.joined(separator: "\n")
+    }
+  }
+
   // MARK: Tiles
 
   /// Adds one tile per audio file to the shown set, copying the file into it;
@@ -401,5 +446,15 @@ final class BoardModel {
 
   private func rememberSelection() {
     UserDefaults.standard.set(library.selectedSetID.uuidString, forKey: Self.selectedSetKey)
+  }
+}
+
+enum BoardModelError: LocalizedError {
+  case libraryUnavailable
+
+  var errorDescription: String? {
+    switch self {
+    case .libraryUnavailable: "The sound library couldn’t be opened."
+    }
   }
 }
