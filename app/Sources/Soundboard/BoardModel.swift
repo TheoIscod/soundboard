@@ -10,7 +10,7 @@ final class BoardModel {
   static let gridColumns = 6
   private nonisolated static let log = Logger(
     subsystem: "io.github.theoiscod.soundboard",
-    category: "waveform"
+    category: "board"
   )
   private static let selectedSetKey = "selectedSetID"
   private static let masterVolumeKey = "masterVolume"
@@ -453,6 +453,59 @@ final class BoardModel {
       release(tile)
     }
     return true
+  }
+
+  // MARK: Links
+
+  /// Files opened from Finder or the Dock are sets; soundboard:// links are commands.
+  func open(_ urls: [URL]) {
+    let links = urls.filter { $0.scheme?.lowercased() == URLCommand.scheme }
+    for link in links {
+      guard let command = URLCommand(link) else {
+        errorMessage = "Lien non reconnu : \(link.absoluteString)"
+        continue
+      }
+      Self.log.debug("Link \(String(describing: command), privacy: .public)")
+      handleLink(command)
+    }
+    let files = urls.filter { $0.isFileURL }
+    if !files.isEmpty { openSets(files) }
+  }
+
+  private func handleLink(_ command: URLCommand) {
+    switch command {
+    case .osc(let command):
+      handleOSC(command)
+    case .showSet(let title):
+      guard let set = library.sets.first(where: { URLCommand.sameName($0.title, title) }) else {
+        errorMessage = "Aucun set nommé « \(title) »."
+        return
+      }
+      selectSet(set.id)
+    case .tile(let title, let setTitle, let action):
+      guard let tile = tile(named: title, inSetNamed: setTitle) else {
+        errorMessage =
+          "Aucune tuile nommée « \(title) »"
+          + (setTitle.map { " dans le set « \($0) »" } ?? "") + "."
+        return
+      }
+      switch action {
+      // A link that plays leaves an already playing tile alone rather than stopping it.
+      case .play where coordinator.state(of: tile.id) == .playing: return
+      case .play: press(tile, modifier: .none)
+      case .stop: perform(coordinator.stop(tile.id, fade: nil))
+      case .fade: perform(coordinator.stop(tile.id, fade: coordinator.fadeTime))
+      }
+    }
+  }
+
+  /// The shown set is searched first, then the other ordinary sets in sidebar order.
+  private func tile(named title: String, inSetNamed setTitle: String?) -> Tile? {
+    let ordinary = library.sets.filter { !$0.isSmart }
+    let candidates =
+      setTitle.map { name in ordinary.filter { URLCommand.sameName($0.title, name) } }
+      ?? [soundSet] + ordinary.filter { $0.id != soundSet.id }
+    return candidates.lazy.flatMap(\.tiles).first { URLCommand.sameName($0.title, title) }
   }
 
   // MARK: OSC

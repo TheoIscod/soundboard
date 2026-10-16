@@ -123,3 +123,14 @@ private func makeTile(_ title: String = "Tile") -> Tile {
   _ = coordinator.press(first)
   #expect(coordinator.stopAll() == [.stop(first.id, fade: nil)])
 }
+
+@Test func stopEndsAPlayingOrPausedTileAndIgnoresIdleOnes() {
+  var coordinator = PlaybackCoordinator()
+  let tile = makeTile()
+
+  #expect(coordinator.stop(tile.id, fade: nil) == [])
+  _ = coordinator.press(tile)
+  _ = coordinator.press(tile, modifier: .pause)
+  #expect(coordinator.stop(tile.id, fade: 2) == [.stop(tile.id, fade: 2)])
+  #expect(coordinator.state(of: tile.id) == nil)
+}
