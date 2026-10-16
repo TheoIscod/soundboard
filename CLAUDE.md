@@ -159,6 +159,14 @@ Farrago; only run them when explicitly asked.
   Float32 pairs), like Farrago's `Metadata/` waveform. The copied sound never
   changes, so the file id is the cache key (no hash). Unreadable or outdated files
   are recomputed; removing a sound removes its waveforms; imports copy them.
+- **Shortcuts integration = `soundboard://` links**, not App Intents: App Intents
+  compile with the Command Line Tools but only show up in Shortcuts with the
+  `Metadata.appintents` that Xcode's `appintentsmetadataprocessor` generates, and
+  Xcode can't be installed without an Apple ID. `URLCommand`: `play|stop|fade?title=`
+  (`&set=`), `set?title=`, and every OSC address as a path (`?value=`). Names compare
+  ignoring case and accents; query values are percent-decoded once more because
+  `open` double-encodes links typed with raw accents. `farrago://` is not claimed.
+  Check: `open -g "soundboard://…"` against a throwaway library with OSC feedback on.
 - **Icon is drawn by `scripts/make-icon.swift`**, our own design; the generated
   `.icns` is committed so bundling doesn't need to redraw it.
 - **Own document format**: `SoundSet` is `Codable` with its own

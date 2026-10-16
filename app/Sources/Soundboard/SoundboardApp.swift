@@ -51,7 +51,7 @@ struct SoundboardApp: App {
       .onAppear {
         keyboard.install(model: model)
         midi.install(model: model)
-        appDelegate.openHandler = { [model] urls in model.openSets(urls) }
+        appDelegate.openHandler = { [model] urls in model.open(urls) }
       }
     }
     .commands {

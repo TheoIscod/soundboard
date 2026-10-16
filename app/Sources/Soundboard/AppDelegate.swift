@@ -1,6 +1,7 @@
 import AppKit
 
-/// Receives sets opened from Finder (double-click, Open With) or dropped on the Dock icon.
+/// Receives sets opened from Finder (double-click, Open With) or dropped on the Dock icon,
+/// and soundboard:// links (e.g. from Shortcuts).
 /// They can arrive before the board is ready when the open launches the app, so they wait
 /// until a handler is set.
 @MainActor

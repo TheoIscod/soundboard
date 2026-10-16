@@ -117,6 +117,13 @@ public struct PlaybackCoordinator: Sendable {
     return affected.map { target == .paused ? .pause($0) : .resume($0) }
   }
 
+  /// Stops one tile whatever its state (playing or paused); nothing if it is idle.
+  public mutating func stop(_ tileID: UUID, fade: TimeInterval?) -> [PlaybackCommand] {
+    guard states[tileID] != nil else { return [] }
+    states[tileID] = nil
+    return [.stop(tileID, fade: fade)]
+  }
+
   public mutating func stopAll() -> [PlaybackCommand] {
     stopEverything(except: nil, fade: nil)
   }

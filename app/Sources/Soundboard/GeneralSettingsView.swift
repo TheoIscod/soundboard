@@ -23,6 +23,16 @@ struct SettingsView: View {
 private struct GeneralSettingsView: View {
   let hotKey: GlobalHotKey
 
+  private static let links: [(String, String)] = [
+    ("soundboard://play?title=Nom", "Lance la tuile (sans l’arrêter si elle joue)"),
+    ("soundboard://stop?title=Nom", "Arrête la tuile"),
+    ("soundboard://fade?title=Nom", "Arrête la tuile en fondu"),
+    ("…&set=Nom du set", "Cherche la tuile dans ce set seulement"),
+    ("soundboard://set?title=Nom", "Affiche le set"),
+    ("soundboard://transport/stopAll", "Tout arrêter"),
+    ("soundboard://master/volume?value=0.5", "Règle le volume général (0 à 1)"),
+  ]
+
   var body: some View {
     Form {
       Section {
@@ -40,9 +50,26 @@ private struct GeneralSettingsView: View {
             + "Pendant l’enregistrement : Échap annule, ⌫ efface le raccourci."
         )
       }
+
+      Section {
+        ForEach(Self.links, id: \.0) { link, meaning in
+          LabeledContent {
+            Text(meaning)
+          } label: {
+            Text(link).font(.body.monospaced()).textSelection(.enabled)
+          }
+        }
+      } header: {
+        Text("Liens soundboard://")
+      } footer: {
+        Text(
+          "Dans l’app Raccourcis, utilisez l’action « Ouvrir les URL » avec ces liens. Les noms "
+            + "ignorent majuscules et accents. Toutes les adresses OSC marchent aussi comme liens."
+        )
+      }
     }
     .formStyle(.grouped)
-    .frame(width: 520, height: 220)
+    .frame(width: 560, height: 520)
   }
 }
 
