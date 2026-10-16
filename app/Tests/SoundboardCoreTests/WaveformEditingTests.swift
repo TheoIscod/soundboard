@@ -92,3 +92,17 @@ import Testing
   #expect(reverted.trimStart == 0 && reverted.fadeOutTime == 0)
   #expect(reverted.loops)
 }
+
+@Test func pinchZoomKeepsThePointedTimeInPlace() {
+  var viewport = WaveformViewport(duration: 8)
+
+  viewport.zoom(by: 2, keepingFraction: 0.25)
+  #expect(viewport.visible == TimeRange(1, 5))
+  #expect(viewport.x(of: 2, width: 100) == 25)
+
+  viewport.zoom(by: 0.25, keepingFraction: 0)
+  #expect(viewport.visible == TimeRange(0, 8))
+
+  viewport.zoom(by: 0, keepingFraction: 0.5)
+  #expect(viewport.visible == TimeRange(0, 8))
+}

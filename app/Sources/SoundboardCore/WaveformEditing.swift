@@ -44,6 +44,16 @@ public struct WaveformViewport: Sendable, Equatable {
     zoom(to: range.length, around: (range.start + range.end) / 2)
   }
 
+  /// Zooms by `factor` (above 1 zooms in) keeping the time at `fraction` of the width where
+  /// it is, as a trackpad pinch around the pointer does.
+  public mutating func zoom(by factor: Double, keepingFraction fraction: Double) {
+    guard factor > 0, factor.isFinite else { return }
+    let fraction = min(max(fraction, 0), 1)
+    let anchor = visible.start + fraction * visible.length
+    let length = clamped(length: visible.length / factor)
+    place(length: length, start: anchor - fraction * length)
+  }
+
   /// Moves the visible span by `seconds`, staying inside the sound.
   public mutating func scroll(by seconds: TimeInterval) {
     place(length: visible.length, start: visible.start + seconds)
@@ -62,8 +72,12 @@ public struct WaveformViewport: Sendable, Equatable {
   }
 
   private mutating func zoom(to length: TimeInterval, around center: TimeInterval) {
-    let length = min(max(length, min(Self.minimumLength, duration)), duration)
+    let length = clamped(length: length)
     place(length: length, start: center - length / 2)
+  }
+
+  private func clamped(length: TimeInterval) -> TimeInterval {
+    min(max(length, min(Self.minimumLength, duration)), duration)
   }
 
   private mutating func place(length: TimeInterval, start: TimeInterval) {
