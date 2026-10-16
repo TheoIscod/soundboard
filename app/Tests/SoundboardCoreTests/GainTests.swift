@@ -52,3 +52,10 @@ import Testing
   #expect(Gain.envelope(at: 1, length: 4, fadeIn: 10, fadeOut: 0) == 0.5)
   #expect(Gain.envelope(at: 2, length: 4, fadeIn: 10, fadeOut: 0) == 1)
 }
+
+@Test func loopingSoundsFadeInOnceAndNeverFadeOutOnTheirOwn() {
+  // 10 s loop, 2 s fades: the fade-in only on the first pass, no dip at the loop end.
+  #expect(Gain.envelope(at: 1, length: 10, fadeIn: 2, fadeOut: 2, loops: true) == 0.5)
+  #expect(Gain.envelope(at: 9.5, length: 10, fadeIn: 2, fadeOut: 2, loops: true) == 1)
+  #expect(Gain.envelope(at: 11, length: 10, fadeIn: 2, fadeOut: 2, loops: true) == 1)
+}

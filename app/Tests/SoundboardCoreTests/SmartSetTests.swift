@@ -86,3 +86,18 @@ private func tile(_ title: String, configure: (inout Tile) -> Void = { _ in }) -
   let old = try PropertyListSerialization.data(fromPropertyList: plist, format: .binary, options: 0)
   #expect(try PropertyListDecoder().decode(SoundSet.self, from: old).smartRules == nil)
 }
+
+@Test func tileCountMatchesTheShownSetWithoutLayingItOut() {
+  var effects = SoundSet(title: "Effects")
+  effects.tiles = [
+    tile("A") { $0.isFavorite = true }, tile("B"), tile("C") { $0.isFavorite = true },
+  ]
+  var favourites = SoundSet(title: "Favourites")
+  favourites.smartRules = SmartRules()
+  let library = SoundLibrary(sets: [effects, favourites])
+
+  #expect(library.tileCount(of: favourites) == 2)
+  #expect(library.tileCount(of: effects) == 3)
+  #expect(
+    library.tileCount(of: favourites) == library.shownSet(favourites, gridColumns: 6).tiles.count)
+}

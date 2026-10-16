@@ -20,12 +20,24 @@ public struct SetStore: Sendable {
       .appending(path: "Soundboard/Sets", directoryHint: .isDirectory)
   }
 
-  public func loadAll() throws -> [SoundSet] {
-    guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+  /// Every readable set; an unreadable package (damaged, newer format…) is reported and
+  /// skipped so it can't hide the others. Throws only if the library folder can't be listed.
+  public func loadAll() throws -> LibraryContents {
+    guard FileManager.default.fileExists(atPath: directory.path) else {
+      return LibraryContents(sets: [], unreadable: [])
+    }
     let packages = try FileManager.default
       .contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
       .filter { $0.pathExtension == Self.packageExtension }
-    return try packages.map { try load(from: $0) }.sorted { $0.title < $1.title }
+    var contents = LibraryContents(sets: [], unreadable: [])
+    for package in packages {
+      do {
+        contents.sets.append(try load(from: package))
+      } catch {
+        contents.unreadable.append("\(package.lastPathComponent) : \(error.localizedDescription)")
+      }
+    }
+    return contents
   }
 
   public func save(_ set: SoundSet) throws {
@@ -61,6 +73,7 @@ public struct SetStore: Sendable {
     for folder in ["Sounds", "Waveforms"] {
       let source = source.appending(path: folder, directoryHint: .isDirectory)
       guard FileManager.default.fileExists(atPath: source.path) else { continue }
+      try Self.refuseSymbolicLinks(in: source)
       try FileManager.default.copyItem(
         at: source,
         to: package.appending(path: folder, directoryHint: .isDirectory)
@@ -84,7 +97,8 @@ public struct SetStore: Sendable {
       at: destination.deletingLastPathComponent(),
       withIntermediateDirectories: true
     )
-    try FileManager.default.copyItem(at: source, to: destination)
+    // Copy the real file behind an alias or symbolic link, not the link itself.
+    try FileManager.default.copyItem(at: source.resolvingSymlinksInPath(), to: destination)
   }
 
   /// Deletes the copy of a tile's sound; a copy that is already gone is not an error.
@@ -159,13 +173,38 @@ public struct SetStore: Sendable {
   }
 }
 
+extension SetStore {
+  /// An imported package must only hold real files: a symbolic link could make the import
+  /// copy any file of the Mac into the library (and into later exports).
+  static func refuseSymbolicLinks(in folder: URL) throws {
+    let items = FileManager.default.enumerator(
+      at: folder,
+      includingPropertiesForKeys: [.isSymbolicLinkKey]
+    )
+    while let item = items?.nextObject() as? URL {
+      if try item.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink == true {
+        throw SetStoreError.symbolicLink(item.lastPathComponent)
+      }
+    }
+  }
+}
+
+public struct LibraryContents: Sendable {
+  public var sets: [SoundSet]
+  /// One line per package that couldn't be read: its name and why.
+  public var unreadable: [String]
+}
+
 public enum SetStoreError: LocalizedError, Equatable {
   case newerFormat(String, version: Int)
+  case symbolicLink(String)
 
   public var errorDescription: String? {
     switch self {
     case .newerFormat(let title, let version):
       "« \(title) » a été enregistré par une version plus récente de Soundboard (format \(version))."
+    case .symbolicLink(let name):
+      "Le set contient un lien symbolique (« \(name) ») : il n’est pas importé par sécurité."
     }
   }
 }

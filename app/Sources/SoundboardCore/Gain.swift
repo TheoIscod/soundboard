@@ -52,15 +52,23 @@ public enum Gain {
     return gain
   }
 
-  /// Per-tile fade envelope at `position` seconds into a trimmed region of `length` seconds.
-  /// Each fade is limited to half the region so fade-in and fade-out never overlap.
+  /// Per-tile fade envelope `elapsed` seconds after the sound started, in a trimmed region of
+  /// `length` seconds. Each fade is limited to half the region so they never overlap.
+  /// A looping sound fades in on its first pass only and never fades out on its own: it
+  /// would otherwise dip to silence at every loop.
   public static func envelope(
-    at position: TimeInterval,
+    at elapsed: TimeInterval,
     length: TimeInterval,
     fadeIn: TimeInterval,
-    fadeOut: TimeInterval
+    fadeOut: TimeInterval,
+    loops: Bool = false
   ) -> Float {
     guard length > 0 else { return 1 }
+    if loops {
+      return elapsed < length
+        ? envelope(at: elapsed, length: length, fadeIn: fadeIn, fadeOut: 0) : 1
+    }
+    let position = elapsed
     let half = length / 2
     let fadeIn = min(max(fadeIn, 0), half)
     let fadeOut = min(max(fadeOut, 0), half)

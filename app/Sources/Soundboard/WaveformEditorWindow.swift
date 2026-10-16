@@ -208,7 +208,8 @@ enum EditorUndo {
     // Also correct after a drag, which already applied `settings` live.
     tile.player = settings
     model.update(tile)
-    undoManager?.registerUndo(withTarget: model) { model in
+    // The manager stores this closure, so it must not hold the manager strongly.
+    undoManager?.registerUndo(withTarget: model) { [weak undoManager] model in
       MainActor.assumeIsolated {
         set(
           previous,

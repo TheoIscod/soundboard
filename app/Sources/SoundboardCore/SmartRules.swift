@@ -74,6 +74,13 @@ extension SoundSet {
 }
 
 extension SoundLibrary {
+  /// How many tiles a set shows, without laying them out.
+  public func tileCount(of set: SoundSet) -> Int {
+    guard let rules = set.smartRules else { return set.tiles.count }
+    return sets.lazy.filter { !$0.isSmart }.map { $0.tiles.count(where: rules.matches) }
+      .reduce(0, +)
+  }
+
   /// What a set shows: its own tiles, or for a smart set the matching tiles of the ordinary
   /// sets, in sidebar order then each set's grid order, laid out in a fresh grid.
   public func shownSet(_ set: SoundSet, gridColumns: Int) -> SoundSet {

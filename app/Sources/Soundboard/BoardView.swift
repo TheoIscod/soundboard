@@ -14,8 +14,10 @@ struct BoardView: View {
   )
 
   var body: some View {
+    // Computed once per render: for a smart set it filters every tile of the library.
+    let shown = model.shownSet
     Group {
-      if model.soundSet.isSmart, model.shownSet.tiles.isEmpty {
+      if model.soundSet.isSmart, shown.tiles.isEmpty {
         ContentUnavailableView {
           Label("Aucune tuile ne correspond", systemImage: "gearshape")
         } description: {
@@ -23,7 +25,7 @@ struct BoardView: View {
         } actions: {
           Button("Modifier les règles…") { model.rulesEditorSetID = model.soundSet.id }
         }
-      } else if model.shownSet.tiles.isEmpty {
+      } else if shown.tiles.isEmpty {
         ContentUnavailableView(
           "Déposez des fichiers audio ici",
           systemImage: "waveform",
@@ -35,7 +37,7 @@ struct BoardView: View {
       } else if model.soundSet.displayMode == .list {
         ScrollView {
           LazyVStack(spacing: 2) {
-            ForEach(Array(model.shownSet.listOrder.enumerated()), id: \.element.id) {
+            ForEach(Array(shown.listOrder.enumerated()), id: \.element.id) {
               index, tile in
               ListRowView(
                 tile: tile,
@@ -60,7 +62,7 @@ struct BoardView: View {
       } else {
         ScrollView {
           LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(model.shownSet.gridOrder) { tile in
+            ForEach(shown.gridOrder) { tile in
               TileView(
                 tile: tile,
                 state: model.state(of: tile),

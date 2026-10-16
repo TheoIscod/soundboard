@@ -11,6 +11,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private var pendingURLs: [URL] = []
+  /// Runs before the app quits, e.g. to write changes still waiting to be saved.
+  var terminateHandler: (() -> Void)?
+
+  func applicationWillTerminate(_ notification: Notification) {
+    terminateHandler?()
+  }
 
   func application(_ application: NSApplication, open urls: [URL]) {
     pendingURLs += urls

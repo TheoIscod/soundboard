@@ -9,10 +9,14 @@ final class AudioEngine {
   /// Continuous mode: the voice reached the point where the next tile should start,
   /// `lead` seconds before its end (0 = at the end). Fires at most once per voice.
   var onAdvancePoint: ((UUID, _ lead: TimeInterval) -> Void)?
+  /// A start couldn't happen (unreadable file, empty region, audio engine error).
+  var onStartFailed: ((UUID, any Error) -> Void)?
 
   private let engine = AVAudioEngine()
   private var voices: [UUID: Voice] = [:]
-  private var buffers: [BufferKey: AVAudioPCMBuffer] = [:]
+  private var buffers = BufferCache()
+  /// Starts waiting for their sound to be decoded; a stop before then cancels them.
+  private var pendingStarts: [UUID: UUID] = [:]
   private var timer: Timer?
   private var lastTick = ProcessInfo.processInfo.systemUptime
   private var master = LinearRamp(value: 1)
@@ -46,21 +50,69 @@ final class AudioEngine {
     master.move(to: gain, over: voices.isEmpty ? 0 : LinearRamp.volumeChangeDuration)
   }
 
+  /// Starts the tile. A sound already decoded (and cached) starts at once; otherwise it is
+  /// decoded off the main actor and starts when ready. Failures go to `onStartFailed`.
   /// - Parameters:
   ///   - fadeIn: > 0 starts from silence and ramps up over this time.
   ///   - continuousCrossfade: the set's crossfade when Continuous is active, to report
   ///     the advance point through `onAdvancePoint`; nil when the set doesn't advance.
+  ///   - cached: false for one-off regions (editor previews), which would only fill the cache.
   func start(
     _ tile: Tile,
     url: URL,
     fadeIn: TimeInterval = 0,
     velocity: Float = 1,
-    continuousCrossfade: TimeInterval? = nil
-  ) throws {
+    continuousCrossfade: TimeInterval? = nil,
+    cached: Bool = true
+  ) {
     if voices[tile.id] != nil { removeVoice(tile.id) }
+    let key = BufferKey(
+      fileID: tile.fileID,
+      trimStart: tile.player.trimStart,
+      trimEnd: tile.player.trimEnd
+    )
+    let begin = { [weak self] (buffer: AVAudioPCMBuffer) in
+      guard let self else { return }
+      do {
+        try self.begin(
+          tile, buffer: buffer, fadeIn: fadeIn, velocity: velocity,
+          continuousCrossfade: continuousCrossfade)
+      } catch {
+        self.onStartFailed?(tile.id, error)
+      }
+    }
+    if cached, let buffer = buffers.buffer(for: key) {
+      begin(buffer)
+      return
+    }
+    let token = UUID()
+    pendingStarts[tile.id] = token
+    let trimStart = tile.player.trimStart
+    let trimEnd = tile.player.trimEnd
+    let title = tile.title
+    Task { [weak self] in
+      let result = await Task.detached(priority: .userInitiated) {
+        Result { try DecodedRegion(url: url, trimStart: trimStart, trimEnd: trimEnd, title: title) }
+      }.value
+      guard let self, self.pendingStarts[tile.id] == token else { return }
+      self.pendingStarts[tile.id] = nil
+      switch result {
+      case .success(let decoded):
+        if cached { self.buffers.insert(decoded.buffer, for: key) }
+        begin(decoded.buffer)
+      case .failure(let error):
+        self.onStartFailed?(tile.id, error)
+      }
+    }
+  }
 
-    let buffer = try trimmedBuffer(for: tile, url: url)
-    let length = Double(buffer.frameLength) / buffer.format.sampleRate
+  private func begin(
+    _ tile: Tile,
+    buffer: AVAudioPCMBuffer,
+    fadeIn: TimeInterval,
+    velocity: Float,
+    continuousCrossfade: TimeInterval?
+  ) throws {
     let voice = Voice(settings: tile.player, buffer: buffer)
     voice.velocity = velocity
     if fadeIn > 0 {
@@ -68,12 +120,18 @@ final class AudioEngine {
       voice.fade.move(to: 1, over: fadeIn)
     }
     voice.advanceLead = continuousCrossfade.map {
-      SoundSet.crossfadeLead(crossfade: $0, soundLength: length)
+      SoundSet.crossfadeLead(crossfade: $0, soundLength: voice.length)
     }
     engine.attach(voice.player)
     engine.connect(voice.player, to: engine.mainMixerNode, format: buffer.format)
-    if !engine.isRunning { try engine.start() }
-
+    if !engine.isRunning {
+      do {
+        try engine.start()
+      } catch {
+        engine.detach(voice.player)
+        throw error
+      }
+    }
     schedule(voice, for: tile.id, from: 0)
     voice.player.volume = Gain.snapped(master.value * voice.gain)
     voice.player.play()
@@ -83,6 +141,7 @@ final class AudioEngine {
 
   /// `fade == nil` cuts immediately; otherwise fades to silence, then stops.
   func stop(_ tileID: UUID, fade: TimeInterval?) {
+    pendingStarts[tileID] = nil
     guard let voice = voices[tileID] else { return }
     guard let fade, fade > 0 else {
       removeVoice(tileID)
@@ -116,35 +175,13 @@ final class AudioEngine {
     voices[tileID]?.player.play()
   }
 
-  private func trimmedBuffer(for tile: Tile, url: URL) throws -> AVAudioPCMBuffer {
-    let key = BufferKey(
-      fileID: tile.fileID,
-      trimStart: tile.player.trimStart,
-      trimEnd: tile.player.trimEnd
-    )
-    if let cached = buffers[key] { return cached }
-
-    let file = try AVAudioFile(forReading: url)
-    let sampleRate = file.processingFormat.sampleRate
-    let startFrame = AVAudioFramePosition(tile.player.trimStart * sampleRate)
-    let endFrame = file.length - AVAudioFramePosition(tile.player.trimEnd * sampleRate)
-    let frameCount = AVAudioFrameCount(max(endFrame - startFrame, 0))
-    guard frameCount > 0,
-      let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frameCount)
-    else { throw AudioEngineError.emptyRegion(tile.title) }
-
-    file.framePosition = startFrame
-    try file.read(into: buffer, frameCount: frameCount)
-    buffers[key] = buffer
-    return buffer
-  }
-
   /// Moves a sounding tile's playback to `position` seconds into its trimmed region; a paused
   /// tile resumes from there.
   func seek(_ tileID: UUID, to position: TimeInterval) {
     guard let voice = voices[tileID] else { return }
     let target = Seek.target(position, length: voice.length, loops: voice.loops)
     let wasPlaying = voice.player.isPlaying
+    voice.playedBeforeSchedule = voice.played
     voice.player.stop()
     schedule(voice, for: tileID, from: target)
     if target < voice.length - (voice.advanceLead ?? 0) { voice.hasAdvanced = false }
@@ -239,9 +276,13 @@ final class AudioEngine {
   private func startTimerIfNeeded() {
     guard timer == nil else { return }
     lastTick = ProcessInfo.processInfo.systemUptime
-    timer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
+    let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in
       MainActor.assumeIsolated { self?.tick() }
     }
+    // Common modes: the default mode pauses while a menu is open or a slider is dragged,
+    // which would freeze fades and volume ramps.
+    RunLoop.main.add(timer, forMode: .common)
+    self.timer = timer
   }
 
   private func tick() {
@@ -258,7 +299,7 @@ final class AudioEngine {
         onVoiceFinished?(tileID)
         continue
       }
-      voice.position = currentPosition(of: voice)
+      updatePlayback(of: voice)
       reportAdvanceIfNeeded(tileID, voice: voice, force: false)
       voice.player.volume = Gain.snapped(master.value * voice.gain)
     }
@@ -272,14 +313,16 @@ final class AudioEngine {
     onAdvancePoint?(tileID, lead)
   }
 
-  private func currentPosition(of voice: Voice) -> TimeInterval {
+  private func updatePlayback(of voice: Voice) {
     guard let nodeTime = voice.player.lastRenderTime,
       let playerTime = voice.player.playerTime(forNodeTime: nodeTime),
       voice.length > 0
-    else { return voice.position }
+    else { return }
     // Player time restarts at 0 whenever a seek reschedules, from `offset`.
-    let seconds = voice.offset + Double(playerTime.sampleTime) / playerTime.sampleRate
-    return voice.loops ? seconds.truncatingRemainder(dividingBy: voice.length) : seconds
+    let sinceSchedule = Double(playerTime.sampleTime) / playerTime.sampleRate
+    let seconds = voice.offset + sinceSchedule
+    voice.position = voice.loops ? seconds.truncatingRemainder(dividingBy: voice.length) : seconds
+    voice.played = voice.playedBeforeSchedule + sinceSchedule
   }
 }
 
@@ -290,6 +333,58 @@ enum AudioEngineError: LocalizedError {
     switch self {
     case .emptyRegion(let title): "« \(title) » est vide une fois découpé."
     }
+  }
+}
+
+/// A decoded trimmed region, handed from the decoding task to the main actor. The buffer is
+/// not touched again once decoded, which is what makes sending it safe.
+private final class DecodedRegion: @unchecked Sendable {
+  let buffer: AVAudioPCMBuffer
+
+  init(url: URL, trimStart: TimeInterval, trimEnd: TimeInterval, title: String) throws {
+    let file = try AVAudioFile(forReading: url)
+    let sampleRate = file.processingFormat.sampleRate
+    let startFrame = AVAudioFramePosition(trimStart * sampleRate)
+    let endFrame = file.length - AVAudioFramePosition(trimEnd * sampleRate)
+    let frameCount = AVAudioFrameCount(max(endFrame - startFrame, 0))
+    guard frameCount > 0,
+      let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frameCount)
+    else { throw AudioEngineError.emptyRegion(title) }
+    file.framePosition = startFrame
+    try file.read(into: buffer, frameCount: frameCount)
+    self.buffer = buffer
+  }
+}
+
+/// Decoded regions kept for instant restarts, least recently used dropped first beyond
+/// `budget` bytes. Voices keep their own buffer, so dropping one never cuts a sound.
+private struct BufferCache {
+  static let budget = 256 * 1024 * 1024
+
+  private var entries: [BufferKey: AVAudioPCMBuffer] = [:]
+  private var recency: [BufferKey] = []
+  private var bytes = 0
+
+  mutating func buffer(for key: BufferKey) -> AVAudioPCMBuffer? {
+    guard let buffer = entries[key] else { return nil }
+    recency.removeAll { $0 == key }
+    recency.append(key)
+    return buffer
+  }
+
+  mutating func insert(_ buffer: AVAudioPCMBuffer, for key: BufferKey) {
+    guard entries[key] == nil else { return }
+    entries[key] = buffer
+    recency.append(key)
+    bytes += Self.size(of: buffer)
+    while bytes > Self.budget, recency.count > 1 {
+      let oldest = recency.removeFirst()
+      if let dropped = entries.removeValue(forKey: oldest) { bytes -= Self.size(of: dropped) }
+    }
+  }
+
+  private static func size(of buffer: AVAudioPCMBuffer) -> Int {
+    Int(buffer.frameLength) * Int(buffer.format.channelCount) * MemoryLayout<Float>.size
   }
 }
 
@@ -319,7 +414,11 @@ private final class Voice {
   /// MIDI velocity as a gain factor, 1 for mouse and keyboard triggers.
   var velocity: Float = 1
   var stopsWhenSilent = false
+  /// Seconds into the region, wrapping for looping sounds.
   var position: TimeInterval = 0
+  /// Seconds played since the start, across loops and seeks; drives a looping sound's fade-in.
+  var played: TimeInterval = 0
+  var playedBeforeSchedule: TimeInterval = 0
   /// Seconds before the end at which Continuous starts the next tile; nil if it doesn't.
   var advanceLead: TimeInterval?
   var hasAdvanced = false
@@ -338,10 +437,11 @@ private final class Voice {
 
   var gain: Float {
     let envelope = Gain.envelope(
-      at: position,
+      at: loops ? played : position,
       length: length,
       fadeIn: settings.fadeInTime,
-      fadeOut: settings.fadeOutTime
+      fadeOut: settings.fadeOutTime,
+      loops: loops
     )
     return Gain.snapped(volume.value * velocity * fade.value * envelope)
   }

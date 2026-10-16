@@ -72,16 +72,19 @@ private struct Reader {
   let bytes: [UInt8]
   var offset = 0
 
-  mutating func packet(length: Int) throws -> [OSCMessage] {
+  /// Bundles nest; real senders use one or two levels, so deep nesting is refused.
+  static let maximumBundleDepth = 8
+
+  mutating func packet(length: Int, depth: Int = 0) throws -> [OSCMessage] {
     let end = offset + length
-    guard end <= bytes.count else { throw Failure.malformed }
+    guard end <= bytes.count, depth <= Self.maximumBundleDepth else { throw Failure.malformed }
     if bytes[offset...].starts(with: Array("#bundle".utf8) + [0]) {
       offset += 16  // "#bundle\0" and the 8-byte time tag, ignored: messages act on arrival.
       var messages: [OSCMessage] = []
       while offset < end {
         let size = Int(try int32())
         guard size > 0, size % 4 == 0 else { throw Failure.malformed }
-        messages += try packet(length: size)
+        messages += try packet(length: size, depth: depth + 1)
       }
       return messages
     }

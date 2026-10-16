@@ -52,6 +52,7 @@ struct SoundboardApp: App {
         keyboard.install(model: model)
         midi.install(model: model)
         appDelegate.openHandler = { [model] urls in model.open(urls) }
+        appDelegate.terminateHandler = { [model] in model.flushSaves() }
       }
     }
     .commands {
