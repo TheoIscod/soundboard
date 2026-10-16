@@ -38,15 +38,24 @@ extension Waveform {
     guard !peaks.isEmpty, columns > 0, end > start else { return [] }
     let first = Double(peaks.count) * min(max(start, 0), 1)
     let span = Double(peaks.count) * min(max(end, 0), 1) - first
-    return (0..<columns).map { column in
-      let lower = Int(first + span * Double(column) / Double(columns))
-      let upper = max(Int(first + span * Double(column + 1) / Double(columns)), lower + 1)
-      let slice = peaks[min(lower, peaks.count - 1)..<min(upper, peaks.count)]
-      return WaveformPeak(
-        low: slice.map(\.low).min() ?? 0,
-        high: slice.map(\.high).max() ?? 0
+    // Called on every redraw of the editor: one pass, no intermediate arrays.
+    var result: [WaveformPeak] = []
+    result.reserveCapacity(columns)
+    for column in 0..<columns {
+      let lower = min(Int(first + span * Double(column) / Double(columns)), peaks.count - 1)
+      let upper = min(
+        max(Int(first + span * Double(column + 1) / Double(columns)), lower + 1),
+        peaks.count
       )
+      var low = peaks[lower].low
+      var high = peaks[lower].high
+      for index in (lower + 1)..<upper {
+        low = min(low, peaks[index].low)
+        high = max(high, peaks[index].high)
+      }
+      result.append(WaveformPeak(low: low, high: high))
     }
+    return result
   }
 }
 

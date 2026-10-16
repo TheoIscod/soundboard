@@ -148,6 +148,10 @@ Farrago; only run them when explicitly asked.
   bound and fade over the selection, Revert clears trim and fades; the sound file
   is never rewritten (so Farrago's squared "baked" fade curve isn't used).
   Editor peaks are ~5 ms bins, regrouped per pixel column with `Waveform.columns`.
+  Smoothness: `WaveformBars` is an equatable view (redrawn only when peaks, zoom or
+  trim change), the `Playhead` redraws alone at display rate, handle drags edit a
+  local draft committed on release, and a local event monitor gives pinch / ⌘-scroll
+  zoom around the pointer and scroll panning.
 - **Seeking** (editor ← / →, ±5 s or ±1 s with ⇧, ⌥-click): `AudioEngine.seek`
   stops the node and reschedules the rest of the region (then the whole region
   looping). Player time restarts at 0, so a voice keeps an `offset`; every
