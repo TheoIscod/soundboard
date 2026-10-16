@@ -16,6 +16,29 @@ final class AudioEngine {
   private var timer: Timer?
   private var lastTick = ProcessInfo.processInfo.systemUptime
   private var master = LinearRamp(value: 1)
+  private var configurationObserver: (any NSObjectProtocol)?
+
+  init() {
+    configurationObserver = NotificationCenter.default.addObserver(
+      forName: .AVAudioEngineConfigurationChange,
+      object: engine,
+      queue: .main
+    ) { [weak self] _ in
+      MainActor.assumeIsolated { self?.outputDidChange() }
+    }
+  }
+
+  /// The output device or its format changed (headphones plugged in, Bluetooth connected…).
+  /// AVAudioEngine has stopped and dropped what was scheduled, so the sounds that were
+  /// playing are reported as ended, and the mixer is reconnected to the new output format;
+  /// the engine restarts with the next sound.
+  private func outputDidChange() {
+    for tileID in Array(voices.keys) {
+      removeVoice(tileID)
+      onVoiceFinished?(tileID)
+    }
+    engine.connect(engine.mainMixerNode, to: engine.outputNode, format: nil)
+  }
 
   /// Ramps every sound to the new master gain over 0.2 s.
   func setMasterGain(_ gain: Float) {
