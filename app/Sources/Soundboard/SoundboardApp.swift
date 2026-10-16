@@ -7,6 +7,7 @@ struct SoundboardApp: App {
   @State private var model = BoardModel()
   @State private var keyboard = KeyboardMonitor()
   @State private var midi = MIDIInput()
+  @State private var hotKey = GlobalHotKey()
 
   init() {
     // Launched from `swift run` there is no app bundle, so macOS would
@@ -110,7 +111,7 @@ struct SoundboardApp: App {
     }
 
     Settings {
-      OSCSettingsView(osc: model.osc)
+      SettingsView(hotKey: hotKey, osc: model.osc)
     }
   }
 }

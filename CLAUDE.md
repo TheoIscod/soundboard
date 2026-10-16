@@ -127,6 +127,12 @@ Farrago; only run them when explicitly asked.
   `BoardModel.shownSet`. Those tiles carry the smart set's layout, so
   `BoardModel.update` always keeps the position stored in the tile's own set.
   Smart sets take no dropped sounds, and their tiles can't be deleted or moved there.
+- **Global shortcut** (Settings → Général) brings the app forward, like Farrago's
+  "Bring Farrago Forward"; also `/global/bringForward` over OSC. Registered with
+  Carbon `RegisterEventHotKey` (no Accessibility permission). Since macOS 14 a
+  background app's own `activate()` is ignored, so `AppActivation.bringForward`
+  asks Launch Services to open the running bundle instead (verified from Chrome
+  and Finder via the OSC address).
 - **Icon is drawn by `scripts/make-icon.swift`**, our own design; the generated
   `.icns` is committed so bundling doesn't need to redraw it.
 - **Own document format**: `SoundSet` is `Codable` with its own

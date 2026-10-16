@@ -373,6 +373,7 @@ final class BoardModel {
     case .masterVolume(let volume): master.activeVolume = volume
     case .playPauseAll: togglePauseAll()
     case .stopAll: stopAll()
+    case .bringForward: AppActivation.bringForward()
     }
   }
 
