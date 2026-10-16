@@ -3,6 +3,11 @@ import AppKit
 import SoundboardCore
 
 enum SetFiles {
+  /// Packages the app opens as sets rather than as sounds.
+  static func isSetPackage(_ url: URL) -> Bool {
+    [SetStore.packageExtension, "farragoset"].contains(url.pathExtension.lowercased())
+  }
+
   /// Length of `packets` codec packets of a sound file, for Farrago's packet-based trim
   /// (AAC packets hold 1024 frames, MP3 1152, PCM 1).
   static func seconds(ofPackets packets: Int, in url: URL) throws -> TimeInterval {

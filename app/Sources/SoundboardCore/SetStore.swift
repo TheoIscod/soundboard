@@ -45,6 +45,11 @@ public struct SetStore: Sendable {
     try FileManager.default.copyItem(at: packageURL(for: set.id), to: destination)
   }
 
+  /// The id of the set a `.soundset` package holds, without adding it to the library.
+  public func setID(ofPackage package: URL) throws -> UUID {
+    try load(from: package).id
+  }
+
   /// Adds a copy of an exported `.soundset` package to the library, with fresh identifiers
   /// so importing the same package twice gives two independent sets.
   public func importPackage(at source: URL) throws -> SoundSet {

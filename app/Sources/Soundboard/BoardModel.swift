@@ -123,9 +123,15 @@ final class BoardModel {
     }
   }
 
+  /// Opens sets from Finder, the Dock or a drop: a `.soundset` already in the library is shown
+  /// instead of being duplicated; anything else is imported.
+  func openSets(_ urls: [URL]) {
+    importSets(from: urls, reusingSetsInLibrary: true)
+  }
+
   /// Adds `.soundset` packages and Farrago `.farragoset` sets to the library and shows the
   /// last one imported. Problems are reported once all packages have been tried.
-  func importSets(from urls: [URL]) {
+  func importSets(from urls: [URL], reusingSetsInLibrary: Bool = false) {
     var problems: [String] = []
     for url in urls {
       let name = url.lastPathComponent
@@ -134,6 +140,12 @@ final class BoardModel {
         let set: SoundSet
         switch url.pathExtension.lowercased() {
         case SetStore.packageExtension:
+          if reusingSetsInLibrary,
+            let existing = library.set(withID: try store.setID(ofPackage: url))
+          {
+            selectSet(existing.id)
+            continue
+          }
           set = try store.importPackage(at: url)
         case "farragoset":
           let imported = try FarragoImport.read(package: url, packetDuration: SetFiles.seconds)
@@ -159,6 +171,15 @@ final class BoardModel {
   }
 
   // MARK: Tiles
+
+  /// Handles files dropped on the board: sets are opened, audio files become tiles.
+  func drop(_ urls: [URL]) -> Bool {
+    let sets = urls.filter { SetFiles.isSetPackage($0) }
+    if !sets.isEmpty { openSets(sets) }
+    let others = urls.filter { !SetFiles.isSetPackage($0) }
+    let addedSounds = !others.isEmpty && addFiles(others)
+    return addedSounds || !sets.isEmpty
+  }
 
   /// Adds one tile per audio file to the shown set, copying the file into it;
   /// returns false if none were audio.

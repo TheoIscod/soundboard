@@ -21,7 +21,9 @@ struct BoardView: View {
         ContentUnavailableView(
           "Drop audio files here",
           systemImage: "waveform",
-          description: Text("Each file becomes a tile. Click a tile to play or stop it.")
+          description: Text(
+            "Each file becomes a tile. Click a tile to play or stop it. Drop a set to open it."
+          )
         )
       } else if model.soundSet.displayMode == .list {
         ScrollView {
@@ -82,7 +84,7 @@ struct BoardView: View {
       }
     }
     .dropDestination(for: URL.self) { urls, _ in
-      model.addFiles(urls)
+      model.drop(urls)
     } isTargeted: {
       isDropTargeted = $0
     }

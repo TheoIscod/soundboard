@@ -3,6 +3,7 @@ import SwiftUI
 
 @main
 struct SoundboardApp: App {
+  @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
   @State private var model = BoardModel()
   @State private var keyboard = KeyboardMonitor()
 
@@ -19,7 +20,10 @@ struct SoundboardApp: App {
       } detail: {
         BoardView(model: model)
       }
-      .onAppear { keyboard.install(model: model) }
+      .onAppear {
+        keyboard.install(model: model)
+        appDelegate.openHandler = { [model] urls in model.openSets(urls) }
+      }
     }
     .commands {
       CommandMenu("Playback") {
