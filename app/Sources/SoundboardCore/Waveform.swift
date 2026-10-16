@@ -26,6 +26,30 @@ public enum Waveform {
   }
 }
 
+extension Waveform {
+  /// Regroups the peaks covering `fraction` of the sound (0…1 at both ends) into `columns`
+  /// slices, keeping extremes, so a long or zoomed waveform draws one bar per pixel column.
+  public static func columns(
+    of peaks: [WaveformPeak],
+    from start: Double,
+    to end: Double,
+    count columns: Int
+  ) -> [WaveformPeak] {
+    guard !peaks.isEmpty, columns > 0, end > start else { return [] }
+    let first = Double(peaks.count) * min(max(start, 0), 1)
+    let span = Double(peaks.count) * min(max(end, 0), 1) - first
+    return (0..<columns).map { column in
+      let lower = Int(first + span * Double(column) / Double(columns))
+      let upper = max(Int(first + span * Double(column + 1) / Double(columns)), lower + 1)
+      let slice = peaks[min(lower, peaks.count - 1)..<min(upper, peaks.count)]
+      return WaveformPeak(
+        low: slice.map(\.low).min() ?? 0,
+        high: slice.map(\.high).max() ?? 0
+      )
+    }
+  }
+}
+
 /// Mouse edits of a tile's trim and fades on its waveform, keeping them consistent:
 /// at least `minimumLength` stays playable and each fade fits in half the playable part.
 public struct TrimEditor: Sendable {

@@ -8,6 +8,8 @@ struct TileInspector: View {
   /// Nil hides Delete, for tiles shown in a smart set.
   let onDelete: (() -> Void)?
 
+  @Environment(\.openWindow) private var openWindow
+
   var body: some View {
     Form {
       Section("Tuile") {
@@ -92,6 +94,7 @@ struct TileInspector: View {
       if let duration = model.duration(of: tile) {
         Section {
           WaveformEditor(tile: tile, duration: duration, model: model)
+          Button("Ouvrir l’éditeur complet…") { openWindow(id: EditorWindow.id, value: tile.id) }
           LabeledContent("Début", value: Self.format(tile.player.trimStart))
           LabeledContent("Fin", value: Self.format(duration - tile.player.trimEnd))
           LabeledContent("Fondu d’entrée", value: Self.format(tile.player.fadeInTime))

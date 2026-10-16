@@ -141,6 +141,13 @@ Farrago; only run them when explicitly asked.
   end-to-end checks on throwaway data (`open -g --env SOUNDBOARD_LIBRARY_DIR=… build/Soundboard.app`).
   Handwritten test plists must store `Float` fields as exact float32 values, or
   `PropertyListDecoder` rejects them ("does not fit in Float").
+- **Waveform editor window** (⇧⌘E, one window per tile, `WaveformEditorWindow`):
+  zoom (`WaveformViewport`), selection, trim/fade handles, preview of the
+  selection, undo/redo (a handle drag is one step). Unlike Farrago, editing is
+  **non-destructive**: Crop sets the trim, Fade Selection In/Out move the trim
+  bound and fade over the selection, Revert clears trim and fades; the sound file
+  is never rewritten (so Farrago's squared "baked" fade curve isn't used).
+  Editor peaks are ~5 ms bins, regrouped per pixel column with `Waveform.columns`.
 - **Icon is drawn by `scripts/make-icon.swift`**, our own design; the generated
   `.icns` is committed so bundling doesn't need to redraw it.
 - **Own document format**: `SoundSet` is `Codable` with its own

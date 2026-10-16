@@ -60,3 +60,15 @@ import Testing
   #expect(trimmed.fadeInTime == 2)
   #expect(trimmed.fadeOutTime == 2)
 }
+
+@Test func columnsRegroupPeaksKeepingExtremes() {
+  let peaks = (0..<8).map { WaveformPeak(low: -Float($0), high: Float($0)) }
+
+  #expect(
+    Waveform.columns(of: peaks, from: 0, to: 1, count: 2) == [
+      WaveformPeak(low: -3, high: 3), WaveformPeak(low: -7, high: 7),
+    ])
+  // The second half only, one column per peak and more columns than peaks.
+  #expect(Waveform.columns(of: peaks, from: 0.5, to: 1, count: 4).map(\.high) == [4, 5, 6, 7])
+  #expect(Waveform.columns(of: peaks, from: 0, to: 0.25, count: 4).map(\.high) == [0, 0, 1, 1])
+}
