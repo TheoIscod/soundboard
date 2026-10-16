@@ -91,8 +91,11 @@ struct TileContextMenu: View {
   /// Nil hides Delete, for tiles shown in a smart set.
   let onDelete: (() -> Void)?
 
+  @Environment(\.openWindow) private var openWindow
+
   var body: some View {
     Button("Modifier…", action: onEdit)
+    Button("Ouvrir l’éditeur de forme d’onde") { openWindow(id: EditorWindow.id, value: tile.id) }
     Divider()
     Toggle("Boucle", isOn: model.binding(for: tile, \.player.loops))
     Toggle("Favori", isOn: model.binding(for: tile, \.isFavorite))

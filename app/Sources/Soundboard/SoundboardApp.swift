@@ -55,6 +55,7 @@ struct SoundboardApp: App {
       }
     }
     .commands {
+      EditorCommands(model: model)
       CommandMenu("Lecture") {
         // Farrago also accepts plain Return; ⌃Return can't clash with confirming a text field.
         Button("Jouer la sélection") { model.playSelection() }
@@ -109,6 +110,13 @@ struct SoundboardApp: App {
           .keyboardShortcut("]", modifiers: [.command, .shift])
       }
     }
+
+    WindowGroup("Éditeur", id: EditorWindow.id, for: UUID.self) { $tileID in
+      if let tileID {
+        WaveformEditorWindow(tileID: tileID, model: model)
+      }
+    }
+    .defaultSize(width: 980, height: 440)
 
     Settings {
       SettingsView(hotKey: hotKey, osc: model.osc, midiOutput: model.midiOutput)

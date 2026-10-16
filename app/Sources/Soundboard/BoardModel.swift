@@ -35,6 +35,13 @@ final class BoardModel {
   @ObservationIgnored private var durations: [UUID: TimeInterval] = [:]
   /// Waveform peaks by sound file, loaded on demand by the editor.
   private(set) var waveforms: [UUID: [WaveformPeak]] = [:]
+  /// Finer waveforms for the editor window, by sound file.
+  private(set) var editorWaveforms: [UUID: [WaveformPeak]] = [:]
+  /// Whether the editor is playing a selection.
+  private(set) var isPreviewing = false
+  /// The preview plays as its own voice, outside the coordinator: it never loops or solos.
+  @ObservationIgnored private let previewVoiceID = UUID()
+  @ObservationIgnored private var previewStart: TimeInterval = 0
 
   init() {
     var store: SetStore?
@@ -60,6 +67,10 @@ final class BoardModel {
     engine.setMasterGain(master.gain)
 
     engine.onVoiceFinished = { [weak self] tileID in
+      if tileID == self?.previewVoiceID {
+        self?.isPreviewing = false
+        return
+      }
       self?.coordinator.voiceDidFinish(tileID)
       self?.cueNext(after: tileID)
       self?.sendPlayingFeedback(for: [tileID])
@@ -254,6 +265,11 @@ final class BoardModel {
     save(set)
   }
 
+  /// The tile as stored in its own set.
+  func tile(withID id: UUID) -> Tile? {
+    library.set(containingTile: id)?.tiles.first { $0.id == id }
+  }
+
   var selectedTile: Tile? {
     guard let selectedTileID else { return nil }
     return library.set(containingTile: selectedTileID)?.tiles.first { $0.id == selectedTileID }
@@ -304,6 +320,59 @@ final class BoardModel {
       errorMessage =
         "Impossible d’afficher la forme d’onde de « \(tile.title) » : \(error.localizedDescription)"
     }
+  }
+
+  /// Loads the editor's fine waveform once, off the main actor.
+  func loadEditorWaveform(for tile: Tile) async {
+    guard editorWaveforms[tile.fileID] == nil,
+      let set = library.set(containingTile: tile.id),
+      let url = store?.soundURL(for: tile, in: set.id),
+      let duration = duration(of: tile)
+    else { return }
+    let bins = WaveformLoader.editorBinCount(forDuration: duration)
+    do {
+      let peaks = try await Task.detached(priority: .userInitiated) {
+        try WaveformLoader.peaks(of: url, binCount: bins)
+      }.value
+      editorWaveforms[tile.fileID] = peaks
+    } catch {
+      errorMessage =
+        "Impossible d’afficher la forme d’onde de « \(tile.title) » : \(error.localizedDescription)"
+    }
+  }
+
+  /// Plays `range` of the tile's sound once, as is: no loop, fades or solo.
+  func preview(_ tile: Tile, range: TimeRange) {
+    stopPreview()
+    guard let set = library.set(containingTile: tile.id),
+      let url = store?.soundURL(for: tile, in: set.id),
+      let duration = duration(of: tile)
+    else { return }
+    var voice = tile
+    voice.id = previewVoiceID
+    voice.player.trimStart = range.start
+    voice.player.trimEnd = max(duration - range.end, 0)
+    voice.player.loops = false
+    voice.player.fadeInTime = 0
+    voice.player.fadeOutTime = 0
+    do {
+      try engine.start(voice, url: url)
+      previewStart = range.start
+      isPreviewing = true
+    } catch {
+      errorMessage = "Impossible d’écouter « \(tile.title) » : \(error.localizedDescription)"
+    }
+  }
+
+  func stopPreview() {
+    engine.stop(previewVoiceID, fade: nil)
+    isPreviewing = false
+  }
+
+  /// Where the preview is, in seconds into the whole file.
+  var previewPosition: TimeInterval? {
+    guard isPreviewing else { return nil }
+    return engine.position(of: previewVoiceID).map { previewStart + $0 }
   }
 
   /// Where playback is, in seconds into the whole file, while the tile sounds.

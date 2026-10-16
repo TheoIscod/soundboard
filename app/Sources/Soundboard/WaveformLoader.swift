@@ -7,7 +7,7 @@ enum WaveformLoader {
 
   /// Reads the whole file, mixes its channels to mono and reduces it to peaks.
   /// Blocking: call it off the main actor.
-  static func peaks(of url: URL) throws -> [WaveformPeak] {
+  static func peaks(of url: URL, binCount: Int = binCount) throws -> [WaveformPeak] {
     let file = try AVAudioFile(forReading: url)
     let format = file.processingFormat
     guard file.length > 0,
@@ -31,5 +31,10 @@ enum WaveformLoader {
       for frame in 0..<frameCount { mono[frame] *= scale }
     }
     return Waveform.peaks(of: mono, binCount: binCount)
+  }
+
+  /// Bins for the editor window: about 5 ms each so zooming stays sharp, capped for memory.
+  static func editorBinCount(forDuration duration: TimeInterval) -> Int {
+    min(max(Int(duration * 200), binCount), 200_000)
   }
 }
