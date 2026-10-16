@@ -215,6 +215,29 @@ final class BoardModel {
     perform(coordinator.stopAll())
   }
 
+  func togglePauseAll() {
+    perform(coordinator.togglePauseAll())
+  }
+
+  /// Plays the shown set's tile for `key`; returns false when no tile uses that key.
+  func handleHotkey(_ key: String, isKeyDown: Bool, shift: Bool) -> Bool {
+    guard let tile = soundSet.tile(forHotkey: key) else { return false }
+    if isKeyDown {
+      press(tile, modifier: shift ? .pause : .none)
+    } else {
+      release(tile)
+    }
+    return true
+  }
+
+  /// Gives the tile a hotkey (taking it from another tile of its set); nil clears it.
+  func setHotkey(_ key: String?, for tile: Tile) {
+    guard var set = library.set(containingTile: tile.id) else { return }
+    set.assignHotkey(key, to: tile.id)
+    library.replace(set)
+    save(set)
+  }
+
   func fadeOutAll() {
     perform(coordinator.fadeOutAll())
   }

@@ -119,3 +119,17 @@ struct VoiceStateIndicator: View {
     }
   }
 }
+
+/// The tile's hotkey, shown on the tile and in its list row.
+struct HotkeyBadge: View {
+  let key: String
+
+  var body: some View {
+    Text(key.uppercased())
+      .font(.caption.monospaced().bold())
+      .padding(.horizontal, 5)
+      .padding(.vertical, 1)
+      .background(.black.opacity(0.35), in: RoundedRectangle(cornerRadius: 4))
+      .foregroundStyle(.white)
+  }
+}
