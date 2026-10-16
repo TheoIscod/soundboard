@@ -7,6 +7,8 @@ struct BoardView: View {
   @State private var isInspectorPresented = false
   @State private var tilePendingDeletion: Tile?
   @State private var isSetOptionsPresented = false
+  /// Where each visible tile is laid out in `BoardSpace`, to find the drop target.
+  @State private var tileFrames: [UUID: CGRect] = [:]
 
   private let columns = Array(
     repeating: GridItem(.flexible(), spacing: 10),
@@ -33,11 +35,18 @@ struct BoardView: View {
                 isSelected: model.selectedTileID == tile.id,
                 model: model,
                 onEdit: { edit(tile) },
-                onDelete: { tilePendingDeletion = tile }
+                onDelete: { tilePendingDeletion = tile },
+                onDrop: { drop(tile, at: $0) }
               )
+              .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .named(BoardSpace.name))
+              } action: { frame in
+                tileFrames[tile.id] = frame
+              }
             }
           }
           .padding(12)
+          .coordinateSpace(.named(BoardSpace.name))
         }
       } else {
         ScrollView {
@@ -49,11 +58,18 @@ struct BoardView: View {
                 isSelected: model.selectedTileID == tile.id,
                 model: model,
                 onEdit: { edit(tile) },
-                onDelete: { tilePendingDeletion = tile }
+                onDelete: { tilePendingDeletion = tile },
+                onDrop: { drop(tile, at: $0) }
               )
+              .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .named(BoardSpace.name))
+              } action: { frame in
+                tileFrames[tile.id] = frame
+              }
             }
           }
           .padding(12)
+          .coordinateSpace(.named(BoardSpace.name))
         }
       }
     }
@@ -135,5 +151,21 @@ struct BoardView: View {
   private func edit(_ tile: Tile) {
     model.selectedTileID = tile.id
     isInspectorPresented = true
+  }
+
+  /// Drops onto the tile laid out closest to the release point; dropping nearest the
+  /// dragged tile's own place leaves the order unchanged.
+  private func drop(_ tile: Tile, at location: CGPoint) {
+    let visible = Set(model.soundSet.tiles.map(\.id))
+    let nearest =
+      tileFrames
+      .filter { visible.contains($0.key) }
+      .min { distance(from: location, to: $0.value) < distance(from: location, to: $1.value) }
+    guard let target = nearest?.key else { return }
+    model.moveTile(tile.id, onto: target)
+  }
+
+  private func distance(from point: CGPoint, to frame: CGRect) -> CGFloat {
+    hypot(point.x - frame.midX, point.y - frame.midY)
   }
 }

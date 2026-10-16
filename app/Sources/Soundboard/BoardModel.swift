@@ -260,6 +260,20 @@ final class BoardModel {
     update(played)
   }
 
+  /// Hold to Play tiles start on mouse-down; every other tile on mouse-up.
+  func startsOnPress(_ tile: Tile) -> Bool {
+    tile.isEnabled && tile.holdToPlay && !isInListMode(tile)
+  }
+
+  /// Moves a tile of the shown set to the place of `targetID` in the current display order.
+  func moveTile(_ tileID: UUID, onto targetID: UUID) {
+    guard tileID != targetID,
+      let index = soundSet.displayOrder.firstIndex(where: { $0.id == targetID })
+    else { return }
+    updateShownSet { $0.moveTile(tileID, to: index, gridColumns: Self.gridColumns) }
+    selectedTileID = tileID
+  }
+
   private func isInListMode(_ tile: Tile) -> Bool {
     library.set(containingTile: tile.id)?.displayMode == .list
   }

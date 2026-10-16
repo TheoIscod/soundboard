@@ -8,8 +8,11 @@ struct TileView: View {
   let model: BoardModel
   let onEdit: () -> Void
   let onDelete: () -> Void
+  /// Release point, in `BoardSpace`, of a drag that moves this tile.
+  let onDrop: (CGPoint) -> Void
 
   @State private var isPressed = false
+  @State private var dragOffset = CGSize.zero
 
   var body: some View {
     VStack(spacing: 6) {
@@ -39,7 +42,16 @@ struct TileView: View {
     }
     .scaleEffect(isPressed ? 0.96 : 1)
     .animation(.easeOut(duration: 0.1), value: isPressed)
-    .tileTrigger(tile, model: model, isPressed: $isPressed)
+    .tileTrigger(
+      tile,
+      model: model,
+      isPressed: $isPressed,
+      dragOffset: $dragOffset,
+      onDrop: onDrop
+    )
+    .offset(dragOffset)
+    .zIndex(dragOffset == .zero ? 0 : 1)
+    .opacity(dragOffset == .zero ? 1 : 0.85)
     .contextMenu {
       TileContextMenu(tile: tile, model: model, onEdit: onEdit, onDelete: onDelete)
     }

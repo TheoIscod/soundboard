@@ -147,6 +147,29 @@ public struct SoundSet: Codable, Sendable, Equatable, Identifiable {
     min(max(crossfade, 0), max(soundLength, 0) / 2)
   }
 
+  /// Moves a tile to `index` in the current display order and renumbers that order only:
+  /// list moves rewrite list indices, grid moves rewrite grid cells (packing any gaps).
+  public mutating func moveTile(_ tileID: UUID, to index: Int, gridColumns: Int) {
+    var order = displayOrder
+    guard let from = order.firstIndex(where: { $0.id == tileID }) else { return }
+    let moved = order.remove(at: from)
+    order.insert(moved, at: min(max(index, 0), order.count))
+
+    let positions = Dictionary(uniqueKeysWithValues: order.enumerated().map { ($1.id, $0) })
+    for tileIndex in tiles.indices {
+      guard let position = positions[tiles[tileIndex].id] else { continue }
+      switch displayMode {
+      case .list:
+        tiles[tileIndex].listIndex = position
+      case .grid:
+        tiles[tileIndex].gridPosition = GridPosition(
+          column: position % gridColumns,
+          row: position / gridColumns
+        )
+      }
+    }
+  }
+
   /// First empty cell in reading order, so deleted tiles leave a gap that new tiles fill.
   public func nextFreeGridPosition(columns: Int) -> GridPosition {
     let taken = Set(tiles.map(\.gridPosition))

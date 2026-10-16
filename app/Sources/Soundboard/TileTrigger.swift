@@ -2,20 +2,75 @@ import AppKit
 import SoundboardCore
 import SwiftUI
 
+/// Coordinate space of the grid or list content, used to locate drops while reordering.
+enum BoardSpace {
+  static let name = "board"
+}
+
 extension View {
-  /// Plays the tile on mouse-down and reports mouse-up, so Hold to Play can start and stop.
-  /// Shared by grid tiles and list rows.
-  func tileTrigger(_ tile: Tile, model: BoardModel, isPressed: Binding<Bool>) -> some View {
-    gesture(
-      DragGesture(minimumDistance: 0)
-        .onChanged { _ in
-          guard !isPressed.wrappedValue else { return }
-          isPressed.wrappedValue = true
-          model.press(tile, modifier: currentTriggerModifier())
+  /// Clicking plays the tile on mouse-up, as in Farrago; Hold to Play tiles start on mouse-down
+  /// and stop on mouse-up. Moving more than a few points before releasing drags the tile
+  /// instead: `dragOffset` follows the pointer and `onDrop` gets the release point in
+  /// `BoardSpace`. Shared by grid tiles and list rows.
+  func tileTrigger(
+    _ tile: Tile,
+    model: BoardModel,
+    isPressed: Binding<Bool>,
+    dragOffset: Binding<CGSize>,
+    onDrop: @escaping (CGPoint) -> Void
+  ) -> some View {
+    modifier(
+      TileTriggerModifier(
+        tile: tile,
+        model: model,
+        isPressed: isPressed,
+        dragOffset: dragOffset,
+        onDrop: onDrop
+      )
+    )
+  }
+}
+
+private struct TileTriggerModifier: ViewModifier {
+  /// Pointer travel, in points, that turns a click into a drag.
+  static let dragThreshold: CGFloat = 5
+
+  let tile: Tile
+  let model: BoardModel
+  @Binding var isPressed: Bool
+  @Binding var dragOffset: CGSize
+  let onDrop: (CGPoint) -> Void
+
+  @State private var isDragging = false
+  @State private var startedOnPress = false
+  @State private var triggerModifier = TriggerModifier.none
+
+  func body(content: Content) -> some View {
+    content.gesture(
+      DragGesture(minimumDistance: 0, coordinateSpace: .named(BoardSpace.name))
+        .onChanged { value in
+          if !isPressed {
+            isPressed = true
+            triggerModifier = currentTriggerModifier()
+            startedOnPress = model.startsOnPress(tile)
+            if startedOnPress { model.press(tile, modifier: triggerModifier) }
+          }
+          let distance = hypot(value.translation.width, value.translation.height)
+          if isDragging || distance > Self.dragThreshold {
+            isDragging = true
+            dragOffset = value.translation
+          }
         }
-        .onEnded { _ in
-          isPressed.wrappedValue = false
-          model.release(tile)
+        .onEnded { value in
+          if isDragging {
+            onDrop(value.location)
+          } else if !startedOnPress {
+            model.press(tile, modifier: triggerModifier)
+          }
+          if startedOnPress { model.release(tile) }
+          isPressed = false
+          isDragging = false
+          dragOffset = .zero
         }
     )
   }
