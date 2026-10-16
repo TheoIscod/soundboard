@@ -1,0 +1,4 @@
+/* The fr.lproj folder makes macOS treat the app as French, so its own menus,
+   panels and system messages are French too. */
+CFBundleName = "Soundboard";
+CFBundleDisplayName = "Soundboard";
