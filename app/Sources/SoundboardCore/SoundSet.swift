@@ -92,6 +92,9 @@ public struct SoundSet: Codable, Sendable, Equatable, Identifiable {
   public var crossfadeDuration: TimeInterval = 0
   public var isLocked = false
   public var tiles: [Tile] = []
+  /// Set for smart sets, which show matching tiles of ordinary sets instead of their own.
+  /// Optional so sets saved before smart sets existed still decode.
+  public var smartRules: SmartRules?
 
   public init(title: String) {
     self.title = title

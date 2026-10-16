@@ -121,6 +121,12 @@ Farrago; only run them when explicitly asked.
   are addressed by sidebar index and grid cell. Feedback `…/play 1|0` goes to the
   output address. End-to-end check: enable `oscInputEnabled`/`oscOutputEnabled` in
   the bundle's defaults, send UDP packets to 8080 and listen on 8081.
+- **Smart sets** (spec `analysis/notes/03-smart-sets.md`): a set with
+  `smartRules` shows matching tiles of ordinary sets, laid out in a fresh grid by
+  `SoundLibrary.shownSet`. The board, hotkeys, MIDI, OSC and Play Selection work on
+  `BoardModel.shownSet`. Those tiles carry the smart set's layout, so
+  `BoardModel.update` always keeps the position stored in the tile's own set.
+  Smart sets take no dropped sounds, and their tiles can't be deleted or moved there.
 - **Icon is drawn by `scripts/make-icon.swift`**, our own design; the generated
   `.icns` is committed so bundling doesn't need to redraw it.
 - **Own document format**: `SoundSet` is `Codable` with its own

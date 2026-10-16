@@ -15,7 +15,15 @@ struct BoardView: View {
 
   var body: some View {
     Group {
-      if model.soundSet.tiles.isEmpty {
+      if model.soundSet.isSmart, model.shownSet.tiles.isEmpty {
+        ContentUnavailableView {
+          Label("Aucune tuile ne correspond", systemImage: "gearshape")
+        } description: {
+          Text("Ce smart set montre les tuiles des autres sets qui suivent ses règles.")
+        } actions: {
+          Button("Modifier les règles…") { model.rulesEditorSetID = model.soundSet.id }
+        }
+      } else if model.shownSet.tiles.isEmpty {
         ContentUnavailableView(
           "Déposez des fichiers audio ici",
           systemImage: "waveform",
@@ -27,7 +35,7 @@ struct BoardView: View {
       } else if model.soundSet.displayMode == .list {
         ScrollView {
           LazyVStack(spacing: 2) {
-            ForEach(Array(model.soundSet.listOrder.enumerated()), id: \.element.id) {
+            ForEach(Array(model.shownSet.listOrder.enumerated()), id: \.element.id) {
               index, tile in
               ListRowView(
                 tile: tile,
@@ -36,7 +44,7 @@ struct BoardView: View {
                 isSelected: model.selectedTileID == tile.id,
                 model: model,
                 onEdit: { edit(tile) },
-                onDelete: { model.tilePendingDeletion = tile },
+                onDelete: model.soundSet.isSmart ? nil : { model.tilePendingDeletion = tile },
                 onDrop: { drop(tile, at: $0) }
               )
               .onGeometryChange(for: CGRect.self) { proxy in
@@ -52,14 +60,14 @@ struct BoardView: View {
       } else {
         ScrollView {
           LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(model.soundSet.gridOrder) { tile in
+            ForEach(model.shownSet.gridOrder) { tile in
               TileView(
                 tile: tile,
                 state: model.state(of: tile),
                 isSelected: model.selectedTileID == tile.id,
                 model: model,
                 onEdit: { edit(tile) },
-                onDelete: { model.tilePendingDeletion = tile },
+                onDelete: model.soundSet.isSmart ? nil : { model.tilePendingDeletion = tile },
                 onDrop: { drop(tile, at: $0) }
               )
               .onGeometryChange(for: CGRect.self) { proxy in
@@ -159,7 +167,7 @@ struct BoardView: View {
   /// Drops onto the tile laid out closest to the release point; dropping nearest the
   /// dragged tile's own place leaves the order unchanged.
   private func drop(_ tile: Tile, at location: CGPoint) {
-    let visible = Set(model.soundSet.tiles.map(\.id))
+    let visible = Set(model.shownSet.tiles.map(\.id))
     let nearest =
       tileFrames
       .filter { visible.contains($0.key) }

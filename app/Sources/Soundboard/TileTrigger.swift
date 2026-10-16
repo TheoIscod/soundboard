@@ -88,12 +88,14 @@ struct TileContextMenu: View {
   let tile: Tile
   let model: BoardModel
   let onEdit: () -> Void
-  let onDelete: () -> Void
+  /// Nil hides Delete, for tiles shown in a smart set.
+  let onDelete: (() -> Void)?
 
   var body: some View {
     Button("Modifier…", action: onEdit)
     Divider()
     Toggle("Boucle", isOn: model.binding(for: tile, \.player.loops))
+    Toggle("Favori", isOn: model.binding(for: tile, \.isFavorite))
     Toggle("Solo", isOn: model.binding(for: tile, \.solo))
     Toggle("Maintenir pour jouer", isOn: model.binding(for: tile, \.holdToPlay))
     Toggle("Activée", isOn: model.binding(for: tile, \.isEnabled))
@@ -102,8 +104,10 @@ struct TileContextMenu: View {
         Text(color.displayName).tag(color)
       }
     }
-    Divider()
-    Button("Supprimer…", role: .destructive, action: onDelete)
+    if let onDelete {
+      Divider()
+      Button("Supprimer…", role: .destructive, action: onDelete)
+    }
   }
 }
 

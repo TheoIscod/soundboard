@@ -65,6 +65,10 @@ final class BoardModel {
 
   var soundSet: SoundSet { library.selectedSet }
 
+  /// What the board shows: the selected set's own tiles, or for a smart set the matching
+  /// tiles of ordinary sets. Hotkeys, MIDI and Play Selection act on these tiles.
+  var shownSet: SoundSet { library.shownSet(soundSet, gridColumns: Self.gridColumns) }
+
   func state(of tile: Tile) -> VoiceState? {
     coordinator.state(of: tile.id)
   }
@@ -193,6 +197,11 @@ final class BoardModel {
   /// returns false if none were audio.
   @discardableResult
   func addFiles(_ urls: [URL]) -> Bool {
+    guard !soundSet.isSmart else {
+      errorMessage =
+        "Un smart set se remplit selon ses règles : ajoutez les sons dans un set normal."
+      return false
+    }
     guard let store else {
       errorMessage = "Impossible d’ajouter des sons : la bibliothèque n’a pas pu être ouverte."
       return false
@@ -228,9 +237,13 @@ final class BoardModel {
     guard var set = library.set(containingTile: tile.id),
       let index = set.tiles.firstIndex(where: { $0.id == tile.id })
     else { return }
-    set.tiles[index] = tile
+    var edited = tile
+    // A tile shown in a smart set carries that set's layout; its own set keeps its place.
+    edited.gridPosition = set.tiles[index].gridPosition
+    edited.listIndex = set.tiles[index].listIndex
+    set.tiles[index] = edited
     library.replace(set)
-    engine.update(tile)
+    engine.update(edited)
     save(set)
   }
 
@@ -311,7 +324,7 @@ final class BoardModel {
 
   /// Plays (or stops) the selected tile of the shown set, e.g. the one Cue next moved to.
   func playSelection() {
-    guard let tile = selectedTile, soundSet.tiles.contains(where: { $0.id == tile.id }) else {
+    guard let tile = selectedTile, shownSet.tiles.contains(where: { $0.id == tile.id }) else {
       return
     }
     press(tile, modifier: .none)
@@ -327,7 +340,7 @@ final class BoardModel {
 
   /// Plays the shown set's tile for `key`; returns false when no tile uses that key.
   func handleHotkey(_ key: String, isKeyDown: Bool, shift: Bool) -> Bool {
-    guard let tile = soundSet.tile(forHotkey: key) else { return false }
+    guard let tile = shownSet.tile(forHotkey: key) else { return false }
     if isKeyDown {
       press(tile, modifier: shift ? .pause : .none)
     } else {
@@ -344,8 +357,11 @@ final class BoardModel {
     case .tile(let reference, let position, let action, let pressed):
       let set: SoundSet?
       switch reference {
-      case .selected: set = soundSet
-      case .index(let index): set = library.sets.indices.contains(index) ? library.sets[index] : nil
+      case .selected: set = shownSet
+      case .index(let index):
+        set =
+          library.sets.indices.contains(index)
+          ? library.shownSet(library.sets[index], gridColumns: Self.gridColumns) : nil
       }
       guard let tile = set?.tile(at: position) else { return }
       perform(action, on: tile, pressed: pressed)
@@ -433,10 +449,10 @@ final class BoardModel {
         midiLearningTileID = nil
         return
       }
-      guard let tile = soundSet.tile(forMIDI: note) else { return }
+      guard let tile = shownSet.tile(forMIDI: note) else { return }
       press(tile, modifier: .none, velocity: MIDIMessage.gain(forVelocity: velocity))
     case .noteOff(let note):
-      guard let tile = soundSet.tile(forMIDI: note) else { return }
+      guard let tile = shownSet.tile(forMIDI: note) else { return }
       release(tile)
     }
   }
@@ -510,7 +526,7 @@ final class BoardModel {
 
   /// Moves a tile of the shown set to the place of `targetID` in the current display order.
   func moveTile(_ tileID: UUID, onto targetID: UUID) {
-    guard tileID != targetID,
+    guard !soundSet.isSmart, tileID != targetID,
       let index = soundSet.displayOrder.firstIndex(where: { $0.id == targetID })
     else { return }
     updateShownSet { $0.moveTile(tileID, to: index, gridColumns: Self.gridColumns) }
@@ -557,10 +573,36 @@ final class BoardModel {
 
   /// Clears the played marks of the shown set and selects its first playable tile.
   func resetList() {
-    updateShownSet { set in
-      for index in set.tiles.indices { set.tiles[index].lastPlayed = nil }
+    // Through update() so a smart set clears the marks of the tiles it shows.
+    for tile in shownSet.tiles where tile.lastPlayed != nil {
+      var cleared = tile
+      cleared.lastPlayed = nil
+      update(cleared)
     }
-    selectedTileID = soundSet.firstPlayableTile?.id
+    selectedTileID = shownSet.firstPlayableTile?.id
+  }
+
+  // MARK: Smart sets
+
+  /// Set whose rules are being edited in the rule editor sheet.
+  var rulesEditorSetID: UUID?
+
+  /// Adds a smart set showing favourite tiles and opens its rules.
+  func addSmartSet() {
+    var set = library.addSet()
+    set.title = "Smart set"
+    set.smartRules = SmartRules()
+    library.replace(set)
+    rememberSelection()
+    save(set)
+    rulesEditorSetID = set.id
+  }
+
+  func setRules(_ rules: SmartRules, forSet setID: UUID) {
+    guard var set = library.set(withID: setID), set.isSmart else { return }
+    set.smartRules = rules
+    library.replace(set)
+    save(set)
   }
 
   private func updateShownSet(_ change: (inout SoundSet) -> Void) {

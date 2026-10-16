@@ -16,6 +16,9 @@ struct SetsSidebar: View {
           .tag(set.id)
           .contextMenu {
             Button("Renommer") { beginRenaming(set) }
+            if set.isSmart {
+              Button("Modifier les règles…") { model.rulesEditorSetID = set.id }
+            }
             Button("Supprimer…", role: .destructive) { setPendingDeletion = set }
               .disabled(!model.canDeleteSet())
           }
@@ -63,9 +66,9 @@ struct SetsSidebar: View {
       Label {
         Text(set.title)
       } icon: {
-        Image(systemName: "square.grid.3x3.fill")
+        Image(systemName: set.isSmart ? "gearshape.fill" : "square.grid.3x3.fill")
       }
-      .badge(set.tiles.count)
+      .badge(model.library.shownSet(set, gridColumns: BoardModel.gridColumns).tiles.count)
       .onTapGesture(count: 2) { beginRenaming(set) }
     }
   }
