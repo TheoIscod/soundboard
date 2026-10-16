@@ -148,6 +148,12 @@ Farrago; only run them when explicitly asked.
   bound and fade over the selection, Revert clears trim and fades; the sound file
   is never rewritten (so Farrago's squared "baked" fade curve isn't used).
   Editor peaks are ~5 ms bins, regrouped per pixel column with `Waveform.columns`.
+- **Seeking** (editor ← / →, ±5 s or ±1 s with ⇧, ⌥-click): `AudioEngine.seek`
+  stops the node and reschedules the rest of the region (then the whole region
+  looping). Player time restarts at 0, so a voice keeps an `offset`; every
+  schedule bumps `Voice.schedule` so the completion of a replaced schedule (fired by
+  `stop()`) doesn't end the voice. Completion closures stored in variables must be
+  declared `@Sendable` or they are main-actor isolated and trap on the audio thread.
 - **Icon is drawn by `scripts/make-icon.swift`**, our own design; the generated
   `.icns` is committed so bundling doesn't need to redraw it.
 - **Own document format**: `SoundSet` is `Codable` with its own
