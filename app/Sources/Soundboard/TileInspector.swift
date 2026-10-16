@@ -9,10 +9,10 @@ struct TileInspector: View {
 
   var body: some View {
     Form {
-      Section("Tile") {
-        TextField("Title", text: binding(\.title))
-        TextField("Icon", text: binding(\.icon), prompt: Text("Emoji"))
-        Picker("Color", selection: binding(\.color)) {
+      Section("Tuile") {
+        TextField("Titre", text: binding(\.title))
+        TextField("Icône", text: binding(\.icon), prompt: Text("Emoji"))
+        Picker("Couleur", selection: binding(\.color)) {
           ForEach(TileColor.allCases, id: \.self) { color in
             Text(color.displayName).tag(color)
           }
@@ -22,67 +22,68 @@ struct TileInspector: View {
       }
 
       Section {
-        LabeledContent("Key") {
+        LabeledContent("Touche") {
           HStack {
-            TextField("Key", text: hotkeyText, prompt: Text("None"))
+            TextField("Touche", text: hotkeyText, prompt: Text("Aucune"))
               .labelsHidden()
               .frame(width: 60)
             if tile.hotkey != nil {
-              Button("Clear") { model.setHotkey(nil, for: tile) }
+              Button("Effacer") { model.setHotkey(nil, for: tile) }
             }
           }
         }
       } header: {
-        Text("Keyboard")
+        Text("Clavier")
       } footer: {
         Text(
-          "A letter or digit plays this tile while its set is shown; ⇧ pauses it. "
-            + "Giving a key to another tile of the set takes it from this one."
+          "Une lettre ou un chiffre lance cette tuile quand son set est affiché ; ⇧ la met en pause. "
+            + "Donner la touche à une autre tuile du set la retire à celle-ci."
         )
       }
 
-      Section("Playback") {
-        Toggle("Enabled", isOn: binding(\.isEnabled))
-        Toggle("Loop", isOn: binding(\.player.loops))
+      Section("Lecture") {
+        Toggle("Activée", isOn: binding(\.isEnabled))
+        Toggle("Boucle", isOn: binding(\.player.loops))
         Toggle("Solo", isOn: binding(\.solo))
-        Toggle("Hold to Play", isOn: binding(\.holdToPlay))
+        Toggle("Maintenir pour jouer", isOn: binding(\.holdToPlay))
       }
 
       Section("Volume") {
-        Picker("Plays at", selection: binding(\.player.usesVolumeB)) {
+        Picker("Joue au", selection: binding(\.player.usesVolumeB)) {
           Text("Volume A").tag(false)
           Text("Volume B").tag(true)
         }
         .pickerStyle(.segmented)
         percentSlider("Volume A", value: binding(\.player.volumeA))
         percentSlider("Volume B", value: binding(\.player.volumeB))
-        Toggle("Mute", isOn: binding(\.player.muted))
+        Toggle("Muet", isOn: binding(\.player.muted))
       }
 
       if let duration = model.duration(of: tile) {
         Section {
           WaveformEditor(tile: tile, duration: duration, model: model)
-          LabeledContent("Start", value: Self.format(tile.player.trimStart))
-          LabeledContent("End", value: Self.format(duration - tile.player.trimEnd))
-          LabeledContent("Fade in", value: Self.format(tile.player.fadeInTime))
-          LabeledContent("Fade out", value: Self.format(tile.player.fadeOutTime))
+          LabeledContent("Début", value: Self.format(tile.player.trimStart))
+          LabeledContent("Fin", value: Self.format(duration - tile.player.trimEnd))
+          LabeledContent("Fondu d’entrée", value: Self.format(tile.player.fadeInTime))
+          LabeledContent("Fondu de sortie", value: Self.format(tile.player.fadeOutTime))
         } header: {
-          Text("Trim & Fades")
+          Text("Découpe et fondus")
         } footer: {
           Text(
-            "Drag the bars to trim and the yellow dots to set the fades. "
-              + "Sound length \(Self.format(duration)). Trim and Loop apply the next time it starts."
+            "Faites glisser les barres pour découper et les points jaunes pour régler les fondus. "
+              + "Durée du son : \(Self.format(duration)). La découpe et la boucle s’appliquent "
+              + "au prochain lancement."
           )
         }
       } else {
         Section {
-          Text("The sound file can’t be read, so fades and trim are unavailable.")
+          Text("Le fichier son est illisible : découpe et fondus indisponibles.")
             .foregroundStyle(.secondary)
         }
       }
 
       Section {
-        Button("Delete Tile…", role: .destructive, action: onDelete)
+        Button("Supprimer la tuile…", role: .destructive, action: onDelete)
       }
     }
     .formStyle(.grouped)

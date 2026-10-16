@@ -3,7 +3,11 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>en</string>
+	<string>fr</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>fr</string>
+	</array>
 	<key>CFBundleExecutable</key>
 	<string>Soundboard</string>
 	<key>CFBundleIconFile</key>
@@ -30,7 +34,7 @@
 	<array>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>Soundboard Sound Set</string>
+			<string>Set Soundboard</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>
@@ -44,7 +48,7 @@
 		</dict>
 		<dict>
 			<key>CFBundleTypeName</key>
-			<string>Farrago Sound Set</string>
+			<string>Set Farrago</string>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>LSHandlerRank</key>
@@ -63,7 +67,7 @@
 			<key>UTTypeIdentifier</key>
 			<string>com.rogueamoeba.farrago.farragoset</string>
 			<key>UTTypeDescription</key>
-			<string>Farrago Sound Set</string>
+			<string>Set Farrago</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>com.apple.package</string>
@@ -84,7 +88,7 @@
 			<key>UTTypeIdentifier</key>
 			<string>io.github.theoiscod.soundboard.soundset</string>
 			<key>UTTypeDescription</key>
-			<string>Soundboard Sound Set</string>
+			<string>Set Soundboard</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>com.apple.package</string>

@@ -9,16 +9,16 @@ struct SetOptionsView: View {
     let set = model.soundSet
     Form {
       Picker(
-        "When a sound ends",
+        "À la fin d’un son",
         selection: Binding(get: { set.playbackMode }, set: { model.setPlaybackMode($0) })
       ) {
-        Text("Stop").tag(PlaybackMode.single)
-        Text("Select the next sound").tag(PlaybackMode.toggle)
-        Text("Play the next sound").tag(PlaybackMode.continuous)
+        Text("Arrêter").tag(PlaybackMode.single)
+        Text("Sélectionner le son suivant").tag(PlaybackMode.toggle)
+        Text("Lancer le son suivant").tag(PlaybackMode.continuous)
       }
       .pickerStyle(.radioGroup)
 
-      LabeledContent("Crossfade") {
+      LabeledContent("Fondu enchaîné") {
         HStack {
           Slider(
             value: Binding(
@@ -36,8 +36,8 @@ struct SetOptionsView: View {
       .disabled(set.playbackMode != .continuous)
 
       Text(
-        "Applies in list mode. The next sound starts this long before the end of the current one "
-          + "(at most half its length) and they fade into each other."
+        "S’applique en mode liste. Le son suivant démarre ce temps avant la fin du son en cours "
+          + "(au plus la moitié de sa durée) et les deux se fondent l’un dans l’autre."
       )
       .font(.caption)
       .foregroundStyle(.secondary)

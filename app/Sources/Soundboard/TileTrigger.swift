@@ -91,19 +91,19 @@ struct TileContextMenu: View {
   let onDelete: () -> Void
 
   var body: some View {
-    Button("Edit…", action: onEdit)
+    Button("Modifier…", action: onEdit)
     Divider()
-    Toggle("Loop", isOn: model.binding(for: tile, \.player.loops))
+    Toggle("Boucle", isOn: model.binding(for: tile, \.player.loops))
     Toggle("Solo", isOn: model.binding(for: tile, \.solo))
-    Toggle("Hold to Play", isOn: model.binding(for: tile, \.holdToPlay))
-    Toggle("Enabled", isOn: model.binding(for: tile, \.isEnabled))
-    Picker("Color", selection: model.binding(for: tile, \.color)) {
+    Toggle("Maintenir pour jouer", isOn: model.binding(for: tile, \.holdToPlay))
+    Toggle("Activée", isOn: model.binding(for: tile, \.isEnabled))
+    Picker("Couleur", selection: model.binding(for: tile, \.color)) {
       ForEach(TileColor.allCases, id: \.self) { color in
         Text(color.displayName).tag(color)
       }
     }
     Divider()
-    Button("Delete…", role: .destructive, action: onDelete)
+    Button("Supprimer…", role: .destructive, action: onDelete)
   }
 }
 

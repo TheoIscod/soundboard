@@ -39,7 +39,7 @@ public struct FarragoImport: Sendable {
     var skipped: [String] = []
 
     for case let entry as [String: Any] in root["tiles"] as? [Any] ?? [] {
-      let title = entry["title"] as? String ?? "Untitled"
+      let title = entry["title"] as? String ?? "Sans titre"
       guard let fileID = (entry["fileUUID"] as? String).flatMap(UUID.init(uuidString:)),
         let source = available.first(where: {
           $0.deletingPathExtension().lastPathComponent == fileID.uuidString
@@ -112,7 +112,7 @@ public enum FarragoImportError: LocalizedError, Equatable {
 
   public var errorDescription: String? {
     switch self {
-    case .notASoundSet(let name): "“\(name)” isn’t a Farrago sound set."
+    case .notASoundSet(let name): "« \(name) » n’est pas un set Farrago."
     }
   }
 }

@@ -4,8 +4,6 @@ import SwiftUI
 struct BoardView: View {
   @Bindable var model: BoardModel
   @State private var isDropTargeted = false
-  @State private var isInspectorPresented = false
-  @State private var tilePendingDeletion: Tile?
   @State private var isSetOptionsPresented = false
   /// Where each visible tile is laid out in `BoardSpace`, to find the drop target.
   @State private var tileFrames: [UUID: CGRect] = [:]
@@ -19,10 +17,11 @@ struct BoardView: View {
     Group {
       if model.soundSet.tiles.isEmpty {
         ContentUnavailableView(
-          "Drop audio files here",
+          "Déposez des fichiers audio ici",
           systemImage: "waveform",
           description: Text(
-            "Each file becomes a tile. Click a tile to play or stop it. Drop a set to open it."
+            "Chaque fichier devient une tuile : cliquez dessus pour la lancer ou l’arrêter. "
+              + "Déposez un set pour l’ouvrir."
           )
         )
       } else if model.soundSet.displayMode == .list {
@@ -37,7 +36,7 @@ struct BoardView: View {
                 isSelected: model.selectedTileID == tile.id,
                 model: model,
                 onEdit: { edit(tile) },
-                onDelete: { tilePendingDeletion = tile },
+                onDelete: { model.tilePendingDeletion = tile },
                 onDrop: { drop(tile, at: $0) }
               )
               .onGeometryChange(for: CGRect.self) { proxy in
@@ -60,7 +59,7 @@ struct BoardView: View {
                 isSelected: model.selectedTileID == tile.id,
                 model: model,
                 onEdit: { edit(tile) },
-                onDelete: { tilePendingDeletion = tile },
+                onDelete: { model.tilePendingDeletion = tile },
                 onDrop: { drop(tile, at: $0) }
               )
               .onGeometryChange(for: CGRect.self) { proxy in
@@ -89,59 +88,49 @@ struct BoardView: View {
       isDropTargeted = $0
     }
     .navigationTitle(model.soundSet.title)
-    .inspector(isPresented: $isInspectorPresented) {
-      Group {
-        if let tile = model.selectedTile {
-          TileInspector(tile: tile, model: model) { tilePendingDeletion = tile }
-        } else {
-          ContentUnavailableView("No Tile Selected", systemImage: "square.dashed")
-        }
-      }
-      .inspectorColumnWidth(min: 260, ideal: 300)
-    }
     .toolbar {
       Picker(
-        "Display",
+        "Affichage",
         selection: Binding(
           get: { model.soundSet.displayMode },
           set: { model.setDisplayMode($0) }
         )
       ) {
-        Label("Grid", systemImage: "square.grid.3x3").tag(DisplayMode.grid)
-        Label("List", systemImage: "list.bullet").tag(DisplayMode.list)
+        Label("Grille", systemImage: "square.grid.3x3").tag(DisplayMode.grid)
+        Label("Liste", systemImage: "list.bullet").tag(DisplayMode.list)
       }
       .pickerStyle(.segmented)
-      .help("Show the set as a grid or a list")
-      Button("Set Options", systemImage: "slider.horizontal.3") { isSetOptionsPresented = true }
-        .help("What happens when a sound ends in list mode")
+      .help("Afficher le set en grille ou en liste")
+      Button("Options du set", systemImage: "slider.horizontal.3") { isSetOptionsPresented = true }
+        .help("Ce qui se passe à la fin d’un son, en mode liste")
         .popover(isPresented: $isSetOptionsPresented) { SetOptionsView(model: model) }
       MasterVolumeControl(model: model)
-      Button("Fade Out All", systemImage: "speaker.wave.1") { model.fadeOutAll() }
+      Button("Fondu de sortie général", systemImage: "speaker.wave.1") { model.fadeOutAll() }
         .keyboardShortcut("-", modifiers: [])
-      Button("Pause All", systemImage: "pause.fill") { model.togglePauseAll() }
+      Button("Tout mettre en pause", systemImage: "pause.fill") { model.togglePauseAll() }
         .keyboardShortcut(.space, modifiers: [])
-        .help("Pause everything that plays, or resume what is paused (Space)")
-      Button("Stop All", systemImage: "stop.fill") { model.stopAll() }
+        .help("Met en pause tout ce qui joue, ou reprend ce qui est en pause (Espace)")
+      Button("Tout arrêter", systemImage: "stop.fill") { model.stopAll() }
         .keyboardShortcut(.escape, modifiers: [])
-      Button("Inspector", systemImage: "sidebar.trailing") { isInspectorPresented.toggle() }
+      Button("Inspecteur", systemImage: "sidebar.trailing") { model.isInspectorPresented.toggle() }
         .keyboardShortcut("i", modifiers: .command)
     }
     .confirmationDialog(
-      "Delete “\(tilePendingDeletion?.title ?? "")”?",
+      "Supprimer « \(model.tilePendingDeletion?.title ?? "") » ?",
       isPresented: Binding(
-        get: { tilePendingDeletion != nil },
-        set: { if !$0 { tilePendingDeletion = nil } }
+        get: { model.tilePendingDeletion != nil },
+        set: { if !$0 { model.tilePendingDeletion = nil } }
       )
     ) {
-      Button("Delete Tile", role: .destructive) {
-        if let tile = tilePendingDeletion { model.deleteTile(tile) }
-        tilePendingDeletion = nil
+      Button("Supprimer la tuile", role: .destructive) {
+        if let tile = model.tilePendingDeletion { model.deleteTile(tile) }
+        model.tilePendingDeletion = nil
       }
     } message: {
-      Text("The copy of its sound in this set will be removed. This can’t be undone.")
+      Text("La copie de son son dans ce set sera supprimée. Cette action est irréversible.")
     }
     .alert(
-      "Playback error",
+      "Un problème est survenu",
       isPresented: Binding(
         get: { model.errorMessage != nil },
         set: { if !$0 { model.errorMessage = nil } }
@@ -155,7 +144,7 @@ struct BoardView: View {
 
   private func edit(_ tile: Tile) {
     model.selectedTileID = tile.id
-    isInspectorPresented = true
+    model.isInspectorPresented = true
   }
 
   /// Drops onto the tile laid out closest to the release point; dropping nearest the

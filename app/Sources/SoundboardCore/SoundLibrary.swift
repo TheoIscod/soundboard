@@ -2,7 +2,7 @@ import Foundation
 
 /// All sound sets plus which one is shown. Sets are ordered by title.
 public struct SoundLibrary: Sendable, Equatable {
-  public static let defaultSetTitle = "Untitled Set"
+  public static let defaultSetTitle = "Set sans titre"
 
   public private(set) var sets: [SoundSet]
   public private(set) var selectedSetID: UUID
@@ -35,7 +35,7 @@ public struct SoundLibrary: Sendable, Equatable {
     selectedSetID = id
   }
 
-  /// Adds and selects a new empty set named "Untitled Set", "Untitled Set 2", …
+  /// Adds and selects a new empty set named "Set sans titre", "Set sans titre 2", …
   @discardableResult
   public mutating func addSet() -> SoundSet {
     let titles = Set(sets.map(\.title))

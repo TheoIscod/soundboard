@@ -123,7 +123,7 @@ public enum SetStoreError: LocalizedError, Equatable {
   public var errorDescription: String? {
     switch self {
     case .newerFormat(let title, let version):
-      "“\(title)” was saved by a newer version of Soundboard (format \(version))."
+      "« \(title) » a été enregistré par une version plus récente de Soundboard (format \(version))."
     }
   }
 }

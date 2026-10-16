@@ -58,7 +58,7 @@ struct TileView: View {
     .contextMenu {
       TileContextMenu(tile: tile, model: model, onEdit: onEdit, onDelete: onDelete)
     }
-    .help("Click: play/stop · ⇧-click: pause · ⌘-click: fade out")
+    .help("Clic : lancer/arrêter · ⇧-clic : pause · ⌘-clic : fondu de sortie")
   }
 
   private var badges: some View {
@@ -88,9 +88,16 @@ extension TileColor {
 
   var displayName: String {
     switch self {
-    case .lightBlue: "Light Blue"
-    case .darkBlue: "Dark Blue"
-    default: String(describing: self).capitalized
+    case .purple: "Violet"
+    case .pink: "Rose"
+    case .red: "Rouge"
+    case .orange: "Orange"
+    case .yellow: "Jaune"
+    case .green: "Vert"
+    case .lightBlue: "Bleu clair"
+    case .darkBlue: "Bleu foncé"
+    case .black: "Noir"
     }
   }
+
 }

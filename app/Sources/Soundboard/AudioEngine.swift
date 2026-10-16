@@ -214,7 +214,7 @@ enum AudioEngineError: LocalizedError {
 
   var errorDescription: String? {
     switch self {
-    case .emptyRegion(let title): "“\(title)” has nothing left to play after trimming."
+    case .emptyRegion(let title): "« \(title) » est vide une fois découpé."
     }
   }
 }

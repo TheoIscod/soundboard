@@ -19,7 +19,7 @@ enum SetFiles {
   @MainActor
   static func chooseExportDestination(for set: SoundSet) -> URL? {
     let panel = NSSavePanel()
-    panel.title = "Export Set"
+    panel.title = "Exporter le set"
     panel.nameFieldStringValue = "\(set.title).\(SetStore.packageExtension)"
     panel.canCreateDirectories = true
     return panel.runModal() == .OK ? panel.url : nil
@@ -28,8 +28,9 @@ enum SetFiles {
   @MainActor
   static func chooseSetsToImport() -> [URL] {
     let panel = NSOpenPanel()
-    panel.title = "Import Sets"
-    panel.message = "Choose sets exported by Soundboard (.soundset) or Farrago sets (.farragoset)."
+    panel.title = "Importer des sets"
+    panel.message =
+      "Choisissez des sets exportés par Soundboard (.soundset) ou des sets Farrago (.farragoset)."
     panel.canChooseFiles = true
     panel.canChooseDirectories = true
     panel.allowsMultipleSelection = true

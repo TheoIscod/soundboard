@@ -44,7 +44,7 @@ struct ListRowView: View {
         .frame(width: 52, alignment: .trailing)
       Image(systemName: tile.lastPlayed == nil ? "circle" : "checkmark.circle.fill")
         .foregroundStyle(tile.lastPlayed == nil ? Color.secondary : Color.green)
-        .help(tile.lastPlayed == nil ? "Not played" : "Played")
+        .help(tile.lastPlayed == nil ? "Pas encore joué" : "Déjà joué")
     }
     .padding(.horizontal, 10)
     .padding(.vertical, 6)
