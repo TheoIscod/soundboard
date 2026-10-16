@@ -79,7 +79,8 @@ Farrago; only run them when explicitly asked.
   tested) and `Soundboard` (SwiftUI executable). Tests: `SoundboardCoreTests`
   (Swift Testing).
 - Commands, run from `app/`: `make run`, `make test`, `make lint`,
-  `make format`, `make check` (lint + build + test). `make check` must pass
+  `make format`, `make check` (lint + build + test), `make bundle`
+  (`build/Soundboard.app`, release, ad hoc signed), `make open`, `make icon`. `make check` must pass
   before a task is done.
 - Style: `swift format` with the pinned `app/.swift-format` (2-space indent,
   100 columns). No third-party dependencies so far.
@@ -92,9 +93,15 @@ Farrago; only run them when explicitly asked.
 - **Swift Testing via Makefile flags**: CLT ship `Testing.framework` outside
   the default search paths; `make test` passes `-F`/rpath. Plain `swift test`
   fails without Xcode.
-- **No app bundle yet**: `swift run` launches a bare executable;
-  `setActivationPolicy(.regular)` gives it a Dock icon and windows. Add a
-  bundling step when entitlements, an icon or file-type registration are needed.
+- **App bundle assembled by the Makefile** (no Xcode): `make bundle` copies the
+  release binary, `Resources/Info.plist` (bundle id
+  `io.github.theoiscod.soundboard`, `.soundset` exported as a package type) and
+  `Resources/AppIcon.icns`, then signs ad hoc. `make run` still launches the bare
+  executable, which needs `setActivationPolicy(.regular)` for a Dock icon.
+  Preferences (master volume, shown set) live under the bundle id, separate from
+  the bare executable's `Soundboard` domain; the set library is shared.
+- **Icon is drawn by `scripts/make-icon.swift`**, our own design; the generated
+  `.icns` is committed so bundling doesn't need to redraw it.
 - **Own document format**: `SoundSet` is `Codable` with its own
   `formatVersion`; trim is stored in seconds, not codec packets. Importing
   `.farragoset` is optional and would be a separate importer.

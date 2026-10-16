@@ -18,6 +18,16 @@ make run
 
 The package also opens directly in Xcode (`File > Open…` on `Package.swift`).
 
+To get a real app with its icon:
+
+```bash
+make bundle
+```
+
+This builds `build/Soundboard.app` (release, signed ad hoc for this Mac); `make open`
+builds and launches it. Copy it to `/Applications` to keep it. `make icon` regenerates
+`Resources/AppIcon.icns` from `scripts/make-icon.swift`.
+
 ## Test
 
 ```bash
