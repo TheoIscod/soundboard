@@ -61,7 +61,7 @@ final class AudioEngine {
 
     let buffer = try trimmedBuffer(for: tile, url: url)
     let length = Double(buffer.frameLength) / buffer.format.sampleRate
-    let voice = Voice(settings: tile.player, length: length)
+    let voice = Voice(settings: tile.player, buffer: buffer)
     voice.velocity = velocity
     if fadeIn > 0 {
       voice.fade = LinearRamp(value: 0)
@@ -74,14 +74,7 @@ final class AudioEngine {
     engine.connect(voice.player, to: engine.mainMixerNode, format: buffer.format)
     if !engine.isRunning { try engine.start() }
 
-    voice.player.scheduleBuffer(
-      buffer,
-      at: nil,
-      options: tile.player.loops ? .loops : [],
-      completionCallbackType: .dataPlayedBack
-    ) { [weak self] _ in
-      Task { @MainActor in self?.voiceReachedEnd(tile.id, voice: voice) }
-    }
+    schedule(voice, for: tile.id, from: 0)
     voice.player.volume = Gain.snapped(master.value * voice.gain)
     voice.player.play()
     voices[tile.id] = voice
@@ -146,9 +139,87 @@ final class AudioEngine {
     return buffer
   }
 
-  private func voiceReachedEnd(_ tileID: UUID, voice: Voice) {
-    // Stopping a node also fires its completion; ignore voices already replaced or removed.
-    guard voices[tileID] === voice else { return }
+  /// Moves a sounding tile's playback to `position` seconds into its trimmed region; a paused
+  /// tile resumes from there.
+  func seek(_ tileID: UUID, to position: TimeInterval) {
+    guard let voice = voices[tileID] else { return }
+    let target = Seek.target(position, length: voice.length, loops: voice.loops)
+    let wasPlaying = voice.player.isPlaying
+    voice.player.stop()
+    schedule(voice, for: tileID, from: target)
+    if target < voice.length - (voice.advanceLead ?? 0) { voice.hasAdvanced = false }
+    voice.position = target
+    if wasPlaying { voice.player.play() }
+  }
+
+  /// Seconds into the trimmed region where a sounding tile is, and the region's length.
+  func playback(of tileID: UUID) -> (position: TimeInterval, length: TimeInterval)? {
+    voices[tileID].map { ($0.position, $0.length) }
+  }
+
+  /// Schedules the voice's sound from `start` seconds: the rest of the region, then for
+  /// looping sounds the whole region again and again.
+  private func schedule(_ voice: Voice, for tileID: UUID, from start: TimeInterval) {
+    voice.schedule += 1
+    let schedule = voice.schedule
+    voice.offset = start
+    let frame = AVAudioFrameCount(max(start, 0) * voice.buffer.format.sampleRate)
+    // Explicitly @Sendable: called on an audio thread, so it must not be main-actor isolated.
+    let completion: @Sendable (AVAudioPlayerNodeCompletionCallbackType) -> Void = {
+      [weak self] _ in
+      Task { @MainActor in self?.voiceReachedEnd(tileID, voice: voice, schedule: schedule) }
+    }
+    if frame == 0 {
+      voice.player.scheduleBuffer(
+        voice.buffer,
+        at: nil,
+        options: voice.loops ? .loops : [],
+        completionCallbackType: .dataPlayedBack,
+        completionHandler: completion
+      )
+      return
+    }
+    let rest = Self.slice(of: voice.buffer, from: frame)
+    if voice.loops {
+      voice.player.scheduleBuffer(rest, completionHandler: nil)
+      voice.player.scheduleBuffer(
+        voice.buffer,
+        at: nil,
+        options: .loops,
+        completionCallbackType: .dataPlayedBack,
+        completionHandler: completion
+      )
+    } else {
+      voice.player.scheduleBuffer(
+        rest,
+        at: nil,
+        options: [],
+        completionCallbackType: .dataPlayedBack,
+        completionHandler: completion
+      )
+    }
+  }
+
+  /// The frames of `buffer` from `frame` to its end, as a new buffer.
+  private static func slice(of buffer: AVAudioPCMBuffer, from frame: AVAudioFrameCount)
+    -> AVAudioPCMBuffer
+  {
+    let count = buffer.frameLength - min(frame, buffer.frameLength)
+    guard count > 0,
+      let slice = AVAudioPCMBuffer(pcmFormat: buffer.format, frameCapacity: count),
+      let source = buffer.floatChannelData, let target = slice.floatChannelData
+    else { return buffer }
+    for channel in 0..<Int(buffer.format.channelCount) {
+      target[channel].update(from: source[channel] + Int(frame), count: Int(count))
+    }
+    slice.frameLength = count
+    return slice
+  }
+
+  private func voiceReachedEnd(_ tileID: UUID, voice: Voice, schedule: Int) {
+    // Stopping a node also fires its completion, as does seeking (which reschedules);
+    // ignore voices replaced or removed, and schedules a seek has replaced.
+    guard voices[tileID] === voice, voice.schedule == schedule else { return }
     // The timer may not have seen the last moments of the sound: advance before finishing.
     reportAdvanceIfNeeded(tileID, voice: voice, force: true)
     removeVoice(tileID)
@@ -206,7 +277,8 @@ final class AudioEngine {
       let playerTime = voice.player.playerTime(forNodeTime: nodeTime),
       voice.length > 0
     else { return voice.position }
-    let seconds = Double(playerTime.sampleTime) / playerTime.sampleRate
+    // Player time restarts at 0 whenever a seek reschedules, from `offset`.
+    let seconds = voice.offset + Double(playerTime.sampleTime) / playerTime.sampleRate
     return voice.loops ? seconds.truncatingRemainder(dividingBy: voice.length) : seconds
   }
 }
@@ -235,7 +307,13 @@ private final class Voice {
     didSet { volume.move(to: Self.volume(for: settings), over: LinearRamp.volumeChangeDuration) }
   }
   let loops: Bool
+  /// The trimmed region, kept to reschedule it when seeking.
+  let buffer: AVAudioPCMBuffer
   let length: TimeInterval
+  /// Where the current schedule started, in seconds into the region.
+  var offset: TimeInterval = 0
+  /// Bumped on every (re)schedule, so completions of replaced schedules are ignored.
+  var schedule = 0
   var volume: LinearRamp
   var fade = LinearRamp(value: 1)
   /// MIDI velocity as a gain factor, 1 for mouse and keyboard triggers.
@@ -246,9 +324,10 @@ private final class Voice {
   var advanceLead: TimeInterval?
   var hasAdvanced = false
 
-  init(settings: PlayerSettings, length: TimeInterval) {
+  init(settings: PlayerSettings, buffer: AVAudioPCMBuffer) {
     self.settings = settings
-    self.length = length
+    self.buffer = buffer
+    length = Double(buffer.frameLength) / buffer.format.sampleRate
     loops = settings.loops
     volume = LinearRamp(value: Self.volume(for: settings))
   }

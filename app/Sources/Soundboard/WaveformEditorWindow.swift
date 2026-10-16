@@ -106,6 +106,21 @@ private struct EditorContent: View {
       }
       .keyboardShortcut(.return, modifiers: .command)
       .help("Écoute la sélection, ou le son découpé sans sélection (⌘↩)")
+      Button("Reculer", systemImage: "gobackward.5") { model.scan(tile, by: -Seek.scanStep) }
+        .keyboardShortcut(.leftArrow, modifiers: [])
+        .help("Recule de 5 s dans l’écoute ou la lecture en cours (←, ⇧← pour 1 s)")
+      Button("Avancer", systemImage: "goforward.5") { model.scan(tile, by: Seek.scanStep) }
+        .keyboardShortcut(.rightArrow, modifiers: [])
+        .help("Avance de 5 s dans l’écoute ou la lecture en cours (→, ⇧→ pour 1 s)")
+      // Fine steps: keyboard only.
+      Button("Reculer d’une seconde") { model.scan(tile, by: -Seek.fineScanStep) }
+        .keyboardShortcut(.leftArrow, modifiers: .shift)
+        .frame(width: 0, height: 0)
+        .hidden()
+      Button("Avancer d’une seconde") { model.scan(tile, by: Seek.fineScanStep) }
+        .keyboardShortcut(.rightArrow, modifiers: .shift)
+        .frame(width: 0, height: 0)
+        .hidden()
 
       Divider().frame(height: 18)
 
@@ -149,7 +164,8 @@ private struct EditorContent: View {
       }
       Spacer()
       Text(
-        "Glissez sur la forme d’onde pour sélectionner ; les barres découpent, les points jaunes règlent les fondus."
+        "Glissez pour sélectionner, ⌥-clic pour déplacer la lecture ; les barres découpent, "
+          + "les points jaunes règlent les fondus."
       )
       .foregroundStyle(.secondary)
     }
@@ -340,10 +356,15 @@ private struct EditorWaveform: View {
     }
   }
 
-  /// Drag to select; a click without dragging clears the selection.
+  /// Drag to select; a click without dragging clears the selection; ⌥-click jumps the
+  /// preview or the playing tile there.
   private func selectionGesture(width: CGFloat) -> some Gesture {
     DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.space))
       .onChanged { value in
+        if selectionAnchor == nil, NSEvent.modifierFlags.contains(.option) {
+          model.jump(tile, to: viewport.time(atX: Double(value.location.x), width: Double(width)))
+          return
+        }
         let anchor =
           selectionAnchor ?? viewport.time(atX: Double(value.startLocation.x), width: Double(width))
         selectionAnchor = anchor

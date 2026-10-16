@@ -369,6 +369,23 @@ final class BoardModel {
     isPreviewing = false
   }
 
+  /// Moves the preview if the editor is playing one, otherwise the tile if it sounds,
+  /// by `seconds` (Scan Backward / Forward).
+  func scan(_ tile: Tile, by seconds: TimeInterval) {
+    let voiceID = isPreviewing ? previewVoiceID : tile.id
+    guard let playback = engine.playback(of: voiceID) else { return }
+    engine.seek(voiceID, to: playback.position + seconds)
+  }
+
+  /// Jumps the preview or the sounding tile to `time` seconds into the whole file.
+  func jump(_ tile: Tile, to time: TimeInterval) {
+    if isPreviewing {
+      engine.seek(previewVoiceID, to: time - previewStart)
+    } else if coordinator.state(of: tile.id) != nil {
+      engine.seek(tile.id, to: time - tile.player.trimStart)
+    }
+  }
+
   /// Where the preview is, in seconds into the whole file.
   var previewPosition: TimeInterval? {
     guard isPreviewing else { return nil }
