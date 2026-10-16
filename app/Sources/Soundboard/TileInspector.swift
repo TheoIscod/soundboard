@@ -24,6 +24,26 @@ struct TileInspector: View {
           .lineLimit(2...5)
       }
 
+      Section {
+        LabeledContent("Key") {
+          HStack {
+            TextField("Key", text: hotkeyText, prompt: Text("None"))
+              .labelsHidden()
+              .frame(width: 60)
+            if tile.hotkey != nil {
+              Button("Clear") { model.setHotkey(nil, for: tile) }
+            }
+          }
+        }
+      } header: {
+        Text("Keyboard")
+      } footer: {
+        Text(
+          "A letter or digit plays this tile while its set is shown; ⇧ pauses it. "
+            + "Giving a key to another tile of the set takes it from this one."
+        )
+      }
+
       Section("Playback") {
         Toggle("Enabled", isOn: binding(\.isEnabled))
         Toggle("Loop", isOn: binding(\.player.loops))
@@ -77,6 +97,14 @@ struct TileInspector: View {
       }
     }
     .formStyle(.grouped)
+  }
+
+  /// Shows the key uppercased; typing replaces it with the last character typed.
+  private var hotkeyText: Binding<String> {
+    Binding(
+      get: { tile.hotkey?.uppercased() ?? "" },
+      set: { text in model.setHotkey(text.last.map(String.init), for: tile) }
+    )
   }
 
   private func percentSlider(_ label: String, value: Binding<Float>) -> some View {

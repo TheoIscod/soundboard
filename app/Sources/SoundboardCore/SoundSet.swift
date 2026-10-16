@@ -53,6 +53,9 @@ public struct Tile: Codable, Sendable, Equatable, Identifiable {
   public var solo = false
   public var isFavorite = false
   public var lastPlayed: Date?
+  /// Key that plays the tile while its set is shown; see `Hotkey`. Optional so sets saved
+  /// before hotkeys existed still decode.
+  public var hotkey: String?
   public var gridPosition = GridPosition(column: 0, row: 0)
   public var listIndex = 0
   public var player = PlayerSettings()

@@ -97,6 +97,16 @@ public struct PlaybackCoordinator: Sendable {
     return commands
   }
 
+  /// Pauses every playing sound; when nothing plays, resumes every paused one.
+  public mutating func togglePauseAll() -> [PlaybackCommand] {
+    let playing = states.filter { $0.value == .playing }.keys
+    let target: VoiceState = playing.isEmpty ? .playing : .paused
+    let affected = (playing.isEmpty ? states.filter { $0.value == .paused }.keys : playing)
+      .sorted { $0.uuidString < $1.uuidString }
+    for id in affected { states[id] = target }
+    return affected.map { target == .paused ? .pause($0) : .resume($0) }
+  }
+
   public mutating func stopAll() -> [PlaybackCommand] {
     stopEverything(except: nil, fade: nil)
   }

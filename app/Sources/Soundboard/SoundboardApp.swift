@@ -4,6 +4,7 @@ import SwiftUI
 @main
 struct SoundboardApp: App {
   @State private var model = BoardModel()
+  @State private var keyboard = KeyboardMonitor()
 
   init() {
     // Launched from `swift run` there is no app bundle, so macOS would
@@ -18,6 +19,7 @@ struct SoundboardApp: App {
       } detail: {
         BoardView(model: model)
       }
+      .onAppear { keyboard.install(model: model) }
     }
     .commands {
       CommandMenu("Playback") {

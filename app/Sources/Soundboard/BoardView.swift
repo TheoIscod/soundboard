@@ -116,6 +116,9 @@ struct BoardView: View {
       MasterVolumeControl(model: model)
       Button("Fade Out All", systemImage: "speaker.wave.1") { model.fadeOutAll() }
         .keyboardShortcut("-", modifiers: [])
+      Button("Pause All", systemImage: "pause.fill") { model.togglePauseAll() }
+        .keyboardShortcut(.space, modifiers: [])
+        .help("Pause everything that plays, or resume what is paused (Space)")
       Button("Stop All", systemImage: "stop.fill") { model.stopAll() }
         .keyboardShortcut(.escape, modifiers: [])
       Button("Inspector", systemImage: "sidebar.trailing") { isInspectorPresented.toggle() }
