@@ -89,31 +89,40 @@ struct BoardView: View {
     }
     .navigationTitle(model.soundSet.title)
     .toolbar {
-      Picker(
-        "Affichage",
-        selection: Binding(
-          get: { model.soundSet.displayMode },
-          set: { model.setDisplayMode($0) }
-        )
-      ) {
-        Label("Grille", systemImage: "square.grid.3x3").tag(DisplayMode.grid)
-        Label("Liste", systemImage: "list.bullet").tag(DisplayMode.list)
-      }
-      .pickerStyle(.segmented)
-      .help("Afficher le set en grille ou en liste")
-      Button("Options du set", systemImage: "slider.horizontal.3") { isSetOptionsPresented = true }
+      // Centred so the controls stay above the board and don't spread over the inspector.
+      ToolbarItemGroup(placement: .principal) {
+        Picker(
+          "Affichage",
+          selection: Binding(
+            get: { model.soundSet.displayMode },
+            set: { model.setDisplayMode($0) }
+          )
+        ) {
+          Label("Grille", systemImage: "square.grid.3x3").tag(DisplayMode.grid)
+          Label("Liste", systemImage: "list.bullet").tag(DisplayMode.list)
+        }
+        .pickerStyle(.segmented)
+        .help("Afficher le set en grille ou en liste")
+        Button("Options du set", systemImage: "slider.horizontal.3") {
+          isSetOptionsPresented = true
+        }
         .help("Ce qui se passe à la fin d’un son, en mode liste")
         .popover(isPresented: $isSetOptionsPresented) { SetOptionsView(model: model) }
-      MasterVolumeControl(model: model)
-      Button("Fondu de sortie général", systemImage: "speaker.wave.1") { model.fadeOutAll() }
-        .keyboardShortcut("-", modifiers: [])
-      Button("Tout mettre en pause", systemImage: "pause.fill") { model.togglePauseAll() }
-        .keyboardShortcut(.space, modifiers: [])
-        .help("Met en pause tout ce qui joue, ou reprend ce qui est en pause (Espace)")
-      Button("Tout arrêter", systemImage: "stop.fill") { model.stopAll() }
-        .keyboardShortcut(.escape, modifiers: [])
-      Button("Inspecteur", systemImage: "sidebar.trailing") { model.isInspectorPresented.toggle() }
+        MasterVolumeControl(model: model)
+        Button("Fondu de sortie général", systemImage: "speaker.wave.1") { model.fadeOutAll() }
+          .keyboardShortcut("-", modifiers: [])
+        Button("Tout mettre en pause", systemImage: "pause.fill") { model.togglePauseAll() }
+          .keyboardShortcut(.space, modifiers: [])
+          .help("Met en pause tout ce qui joue, ou reprend ce qui est en pause (Espace)")
+        Button("Tout arrêter", systemImage: "stop.fill") { model.stopAll() }
+          .keyboardShortcut(.escape, modifiers: [])
+      }
+      ToolbarItem(placement: .primaryAction) {
+        Button("Inspecteur", systemImage: "sidebar.trailing") {
+          model.isInspectorPresented.toggle()
+        }
         .keyboardShortcut("i", modifiers: .command)
+      }
     }
     .confirmationDialog(
       "Supprimer « \(model.tilePendingDeletion?.title ?? "") » ?",

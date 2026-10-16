@@ -47,6 +47,7 @@ bundle:
 	cp "$$(swift build -c release --show-bin-path)/Soundboard" $(APP)/Contents/MacOS/
 	cp Resources/Info.plist $(APP)/Contents/
 	cp Resources/AppIcon.icns $(APP)/Contents/Resources/
+	cp -R Resources/fr.lproj $(APP)/Contents/Resources/
 	codesign --force --sign - $(APP)
 
 open: bundle
