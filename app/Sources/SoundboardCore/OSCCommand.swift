@@ -27,6 +27,8 @@ public enum OSCCommand: Sendable, Equatable {
   case masterVolume(Float)
   case playPauseAll
   case stopAll
+  /// Brings the app forward, like the global shortcut.
+  case bringForward
 
   public init?(_ message: OSCMessage) {
     let parts = message.address.split(separator: "/", omittingEmptySubsequences: true)
@@ -56,6 +58,7 @@ public enum OSCCommand: Sendable, Equatable {
     case "master/volumeDown" where pressed: self = .masterVolumeDown
     case "transport/playPauseAll" where pressed: self = .playPauseAll
     case "transport/stopAll" where pressed: self = .stopAll
+    case "global/bringForward" where pressed: self = .bringForward
     default: return nil
     }
   }
