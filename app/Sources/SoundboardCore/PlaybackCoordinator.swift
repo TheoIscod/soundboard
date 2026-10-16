@@ -15,8 +15,9 @@ public enum TriggerModifier: Sendable, Equatable {
 }
 
 public enum PlaybackCommand: Sendable, Equatable {
-  /// `fadeIn` > 0 starts from silence and ramps up linearly.
-  case start(UUID, fadeIn: TimeInterval = 0)
+  /// `fadeIn` > 0 starts from silence and ramps up linearly; `velocity` (0…1) scales the
+  /// sound's gain, 1 for mouse and keyboard triggers.
+  case start(UUID, fadeIn: TimeInterval = 0, velocity: Float = 1)
   /// `fade == nil` stops immediately.
   case stop(UUID, fade: TimeInterval?)
   case pause(UUID)
@@ -37,7 +38,8 @@ public struct PlaybackCoordinator: Sendable {
   public mutating func press(
     _ tile: Tile,
     modifier: TriggerModifier = .none,
-    listMode: Bool = false
+    listMode: Bool = false,
+    velocity: Float = 1
   ) -> [PlaybackCommand] {
     guard tile.isEnabled else { return [] }
     var tile = tile
@@ -46,12 +48,12 @@ public struct PlaybackCoordinator: Sendable {
       tile.holdToPlay = false
     }
     if tile.holdToPlay {
-      return states[tile.id] == nil ? start(tile, modifier: modifier) : []
+      return states[tile.id] == nil ? start(tile, modifier: modifier, velocity: velocity) : []
     }
 
     switch (states[tile.id], modifier) {
     case (nil, _):
-      return start(tile, modifier: modifier)
+      return start(tile, modifier: modifier, velocity: velocity)
     case (.playing, .pause):
       states[tile.id] = .paused
       return [.pause(tile.id)]
@@ -115,13 +117,15 @@ public struct PlaybackCoordinator: Sendable {
     stopEverything(except: nil, fade: fadeTime)
   }
 
-  private mutating func start(_ tile: Tile, modifier: TriggerModifier) -> [PlaybackCommand] {
+  private mutating func start(_ tile: Tile, modifier: TriggerModifier, velocity: Float)
+    -> [PlaybackCommand]
+  {
     var commands: [PlaybackCommand] = []
     if tile.solo {
       commands += stopEverything(except: tile.id, fade: modifier == .fade ? fadeTime : nil)
     }
     states[tile.id] = .playing
-    commands.append(.start(tile.id))
+    commands.append(.start(tile.id, velocity: velocity))
     return commands
   }
 

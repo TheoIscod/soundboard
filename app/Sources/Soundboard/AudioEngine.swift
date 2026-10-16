@@ -54,6 +54,7 @@ final class AudioEngine {
     _ tile: Tile,
     url: URL,
     fadeIn: TimeInterval = 0,
+    velocity: Float = 1,
     continuousCrossfade: TimeInterval? = nil
   ) throws {
     if voices[tile.id] != nil { removeVoice(tile.id) }
@@ -61,6 +62,7 @@ final class AudioEngine {
     let buffer = try trimmedBuffer(for: tile, url: url)
     let length = Double(buffer.frameLength) / buffer.format.sampleRate
     let voice = Voice(settings: tile.player, length: length)
+    voice.velocity = velocity
     if fadeIn > 0 {
       voice.fade = LinearRamp(value: 0)
       voice.fade.move(to: 1, over: fadeIn)
@@ -236,6 +238,8 @@ private final class Voice {
   let length: TimeInterval
   var volume: LinearRamp
   var fade = LinearRamp(value: 1)
+  /// MIDI velocity as a gain factor, 1 for mouse and keyboard triggers.
+  var velocity: Float = 1
   var stopsWhenSilent = false
   var position: TimeInterval = 0
   /// Seconds before the end at which Continuous starts the next tile; nil if it doesn't.
@@ -260,6 +264,6 @@ private final class Voice {
       fadeIn: settings.fadeInTime,
       fadeOut: settings.fadeOutTime
     )
-    return Gain.snapped(volume.value * fade.value * envelope)
+    return Gain.snapped(volume.value * velocity * fade.value * envelope)
   }
 }

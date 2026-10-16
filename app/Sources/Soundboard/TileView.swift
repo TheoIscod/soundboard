@@ -31,7 +31,11 @@ struct TileView: View {
     .background(tile.color.swiftUIColor.opacity(tile.isEnabled ? 1 : 0.35))
     .overlay(alignment: .topTrailing) { VoiceStateIndicator(state: state).padding(6) }
     .overlay(alignment: .topLeading) {
-      if let hotkey = tile.hotkey { HotkeyBadge(key: hotkey).padding(6) }
+      HStack(spacing: 4) {
+        if let hotkey = tile.hotkey { HotkeyBadge(key: hotkey) }
+        if let note = tile.midiTrigger { HotkeyBadge(key: "♪ \(note.noteName)") }
+      }
+      .padding(6)
     }
     .clipShape(RoundedRectangle(cornerRadius: 10))
     .overlay {

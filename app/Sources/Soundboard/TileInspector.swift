@@ -41,6 +41,34 @@ struct TileInspector: View {
         )
       }
 
+      Section {
+        LabeledContent("Note") {
+          HStack {
+            if model.midiLearningTileID == tile.id {
+              Text("Jouez une note…").foregroundStyle(Color.accentColor)
+              Button("Annuler") { model.cancelMIDILearn() }
+            } else {
+              Text(tile.midiTrigger.map(Self.describe) ?? "Aucune")
+                .foregroundStyle(tile.midiTrigger == nil ? .secondary : .primary)
+              Button("Apprendre") {
+                model.selectedTileID = tile.id
+                model.startMIDILearn()
+              }
+              if tile.midiTrigger != nil {
+                Button("Effacer") { model.clearMIDI(for: tile) }
+              }
+            }
+          }
+        }
+      } header: {
+        Text("MIDI")
+      } footer: {
+        Text(
+          "Une note jouée sur un contrôleur lance cette tuile quand son set est affiché ; "
+            + "la vélocité règle son volume. \(Self.sourcesDescription(model.midiSourceCount))"
+        )
+      }
+
       Section("Lecture") {
         Toggle("Activée", isOn: binding(\.isEnabled))
         Toggle("Boucle", isOn: binding(\.player.loops))
@@ -87,6 +115,18 @@ struct TileInspector: View {
       }
     }
     .formStyle(.grouped)
+  }
+
+  private static func describe(_ note: MIDINote) -> String {
+    "\(note.noteName) · canal \(note.channel)"
+  }
+
+  private static func sourcesDescription(_ count: Int) -> String {
+    switch count {
+    case 0: "Aucune source MIDI connectée."
+    case 1: "1 source MIDI connectée."
+    default: "\(count) sources MIDI connectées."
+    }
   }
 
   /// Shows the key uppercased; typing replaces it with the last character typed.

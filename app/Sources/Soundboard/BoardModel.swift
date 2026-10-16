@@ -289,9 +289,16 @@ final class BoardModel {
 
   // MARK: Playback
 
-  func press(_ tile: Tile, modifier: TriggerModifier) {
+  func press(_ tile: Tile, modifier: TriggerModifier, velocity: Float = 1) {
     selectedTileID = tile.id
-    perform(coordinator.press(tile, modifier: modifier, listMode: isInListMode(tile)))
+    perform(
+      coordinator.press(
+        tile,
+        modifier: modifier,
+        listMode: isInListMode(tile),
+        velocity: velocity
+      )
+    )
   }
 
   func release(_ tile: Tile) {
@@ -325,6 +332,55 @@ final class BoardModel {
     return true
   }
 
+  // MARK: MIDI
+
+  /// Tile waiting for the next note played on a controller (MIDI learn).
+  var midiLearningTileID: UUID?
+  /// Number of MIDI sources currently listened to, shown in the inspector.
+  var midiSourceCount = 0
+
+  /// The next note played on a controller will trigger the selected tile.
+  func startMIDILearn() {
+    midiLearningTileID = selectedTileID
+  }
+
+  func cancelMIDILearn() {
+    midiLearningTileID = nil
+  }
+
+  func clearMIDI(for tile: Tile) {
+    setMIDI(nil, for: tile)
+  }
+
+  /// Note-on plays the shown set's tile for that note, scaled by velocity; note-off releases
+  /// Hold to Play tiles. While learning, the first note-on is given to the learning tile.
+  func handleMIDI(_ message: MIDIMessage) {
+    switch message {
+    case .noteOn(let note, let velocity):
+      if let learningID = midiLearningTileID,
+        let tile = library.set(containingTile: learningID)?.tiles.first(where: {
+          $0.id == learningID
+        })
+      {
+        setMIDI(note, for: tile)
+        midiLearningTileID = nil
+        return
+      }
+      guard let tile = soundSet.tile(forMIDI: note) else { return }
+      press(tile, modifier: .none, velocity: MIDIMessage.gain(forVelocity: velocity))
+    case .noteOff(let note):
+      guard let tile = soundSet.tile(forMIDI: note) else { return }
+      release(tile)
+    }
+  }
+
+  private func setMIDI(_ note: MIDINote?, for tile: Tile) {
+    guard var set = library.set(containingTile: tile.id) else { return }
+    set.assignMIDI(note, to: tile.id)
+    library.replace(set)
+    save(set)
+  }
+
   /// Gives the tile a hotkey (taking it from another tile of its set); nil clears it.
   func setHotkey(_ key: String?, for tile: Tile) {
     guard var set = library.set(containingTile: tile.id) else { return }
@@ -340,8 +396,8 @@ final class BoardModel {
   private func perform(_ commands: [PlaybackCommand]) {
     for command in commands {
       switch command {
-      case .start(let tileID, let fadeIn):
-        start(tileID, fadeIn: fadeIn)
+      case .start(let tileID, let fadeIn, let velocity):
+        start(tileID, fadeIn: fadeIn, velocity: velocity)
       case .stop(let tileID, let fade):
         engine.stop(tileID, fade: fade)
         cueNext(after: tileID)
@@ -353,7 +409,7 @@ final class BoardModel {
     }
   }
 
-  private func start(_ tileID: UUID, fadeIn: TimeInterval) {
+  private func start(_ tileID: UUID, fadeIn: TimeInterval, velocity: Float) {
     guard let set = library.set(containingTile: tileID),
       let tile = set.tiles.first(where: { $0.id == tileID }),
       let url = store?.soundURL(for: tile, in: set.id)
@@ -366,6 +422,7 @@ final class BoardModel {
         tile,
         url: url,
         fadeIn: fadeIn,
+        velocity: velocity,
         continuousCrossfade: set.continuousCrossfade
       )
     } catch {
