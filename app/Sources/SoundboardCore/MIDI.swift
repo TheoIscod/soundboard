@@ -39,6 +39,17 @@ public enum MIDIMessage: Sendable, Equatable {
     }
   }
 
+  /// The message as a MIDI 1.0 channel voice Universal MIDI Packet word, group 0.
+  public var universalPacketWord: UInt32 {
+    let (status, note, velocity): (UInt32, MIDINote, Int) =
+      switch self {
+      case .noteOn(let note, let velocity): (0x9, note, velocity)
+      case .noteOff(let note): (0x8, note, 0)
+      }
+    return (0x2 << 28) | (status << 20) | (UInt32(note.channel - 1) & 0xF) << 16
+      | (UInt32(note.note) & 0x7F) << 8 | (UInt32(velocity) & 0x7F)
+  }
+
   /// Velocity as a gain factor: full velocity plays at the tile's own volume.
   public static func gain(forVelocity velocity: Int) -> Float {
     Float(min(max(velocity, 0), 127)) / 127
@@ -59,5 +70,26 @@ extension SoundSet {
         tiles[index].midiTrigger = nil
       }
     }
+  }
+}
+
+/// Which controller pads are lit, so only changes are sent: a pad lights while its tile plays.
+public struct MIDILights: Sendable, Equatable {
+  public private(set) var lit: Set<MIDINote> = []
+
+  public init() {}
+
+  /// Messages turning off pads no longer wanted and lighting new ones, with `velocity`
+  /// (which picks the colour on many pad controllers). Updates what is recorded as lit.
+  public mutating func update(to wanted: Set<MIDINote>, velocity: Int) -> [MIDIMessage] {
+    let off = lit.subtracting(wanted).sorted(by: Self.order).map { MIDIMessage.noteOff($0) }
+    let on = wanted.subtracting(lit).sorted(by: Self.order)
+      .map { MIDIMessage.noteOn($0, velocity: min(max(velocity, 1), 127)) }
+    lit = wanted
+    return off + on
+  }
+
+  private static func order(_ lhs: MIDINote, _ rhs: MIDINote) -> Bool {
+    (lhs.channel, lhs.note) < (rhs.channel, rhs.note)
   }
 }
