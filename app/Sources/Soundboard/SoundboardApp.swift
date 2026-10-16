@@ -47,6 +47,13 @@ struct SoundboardApp: App {
           model.setDisplayMode(model.soundSet.displayMode == .list ? .grid : .list)
         }
         Divider()
+        Button("Import Set…") { model.importSets(from: SetFiles.chooseSetsToImport()) }
+        Button("Export Set…") {
+          if let destination = SetFiles.chooseExportDestination(for: model.soundSet) {
+            model.exportShownSet(to: destination)
+          }
+        }
+        Divider()
         Button("Select Previous Set") { model.selectPreviousSet() }
           .keyboardShortcut("[", modifiers: [.command, .shift])
         Button("Select Next Set") { model.selectNextSet() }

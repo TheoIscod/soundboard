@@ -52,6 +52,14 @@ public struct SoundLibrary: Sendable, Equatable {
     return set
   }
 
+  /// Adds an existing set, e.g. an imported one, and shows it.
+  public mutating func add(_ set: SoundSet) {
+    guard !sets.contains(where: { $0.id == set.id }) else { return }
+    sets.append(set)
+    sets.sort(by: Self.order)
+    selectedSetID = set.id
+  }
+
   public mutating func replace(_ set: SoundSet) {
     guard let index = sets.firstIndex(where: { $0.id == set.id }) else { return }
     sets[index] = set

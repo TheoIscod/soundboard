@@ -36,6 +36,33 @@ public struct SetStore: Sendable {
     try encoder.encode(set).write(to: package.appending(path: "Set.plist"), options: .atomic)
   }
 
+  /// Copies the set's package (plist and sounds) to `destination`, replacing what is there.
+  public func export(_ set: SoundSet, to destination: URL) throws {
+    try save(set)
+    if FileManager.default.fileExists(atPath: destination.path) {
+      try FileManager.default.removeItem(at: destination)
+    }
+    try FileManager.default.copyItem(at: packageURL(for: set.id), to: destination)
+  }
+
+  /// Adds a copy of an exported `.soundset` package to the library, with fresh identifiers
+  /// so importing the same package twice gives two independent sets.
+  public func importPackage(at source: URL) throws -> SoundSet {
+    let original = try load(from: source)
+    let set = original.withFreshIdentifiers()
+    let sounds = source.appending(path: "Sounds", directoryHint: .isDirectory)
+    let package = packageURL(for: set.id)
+    try FileManager.default.createDirectory(at: package, withIntermediateDirectories: true)
+    if FileManager.default.fileExists(atPath: sounds.path) {
+      try FileManager.default.copyItem(
+        at: sounds,
+        to: package.appending(path: "Sounds", directoryHint: .isDirectory)
+      )
+    }
+    try save(set)
+    return set
+  }
+
   /// Deletes the set's package, including its copied sounds.
   public func delete(_ setID: UUID) throws {
     let package = packageURL(for: setID)
