@@ -111,7 +111,7 @@ struct SoundboardApp: App {
     }
 
     Settings {
-      SettingsView(hotKey: hotKey, osc: model.osc)
+      SettingsView(hotKey: hotKey, osc: model.osc, midiOutput: model.midiOutput)
     }
   }
 }

@@ -67,3 +67,30 @@ private func word(status: UInt32, channel: UInt32, note: UInt32, velocity: UInt3
 
   #expect(coordinator.press(tile, velocity: 0.5) == [.start(tile.id, velocity: 0.5)])
 }
+
+@Test func encodedMessagesDecodeBackToThemselves() {
+  let messages: [MIDIMessage] = [
+    .noteOn(MIDINote(channel: 1, note: 60), velocity: 100),
+    .noteOn(MIDINote(channel: 16, note: 127), velocity: 1),
+    .noteOff(MIDINote(channel: 10, note: 36)),
+  ]
+
+  for message in messages {
+    #expect(MIDIMessage(universalPacketWord: message.universalPacketWord) == message)
+  }
+  #expect(
+    MIDIMessage.noteOn(MIDINote(channel: 1, note: 60), velocity: 100).universalPacketWord
+      == 0x2090_3C64)
+}
+
+@Test func lightsSendOnlyChanges() {
+  var lights = MIDILights()
+  let kick = MIDINote(channel: 10, note: 36)
+  let snare = MIDINote(channel: 10, note: 38)
+
+  #expect(lights.update(to: [kick], velocity: 127) == [.noteOn(kick, velocity: 127)])
+  #expect(lights.update(to: [kick], velocity: 127) == [])
+  #expect(lights.update(to: [snare], velocity: 5) == [.noteOff(kick), .noteOn(snare, velocity: 5)])
+  #expect(lights.update(to: [], velocity: 127) == [.noteOff(snare)])
+  #expect(lights.lit.isEmpty)
+}

@@ -30,6 +30,8 @@ final class BoardModel {
   @ObservationIgnored private let engine = AudioEngine()
   /// OSC remote control and feedback; its settings are edited in the Settings window.
   let osc = OSCService()
+  /// Lights controller pads while their tiles play; its destination is chosen in Settings.
+  let midiOutput = MIDIOutput()
   @ObservationIgnored private var durations: [UUID: TimeInterval] = [:]
   /// Waveform peaks by sound file, loaded on demand by the editor.
   private(set) var waveforms: [UUID: [WaveformPeak]] = [:]
@@ -39,7 +41,12 @@ final class BoardModel {
     var loaded: [SoundSet] = []
     var loadError: String?
     do {
-      let library = SetStore(directory: try SetStore.defaultDirectory())
+      // SOUNDBOARD_LIBRARY_DIR points the app at another library, e.g. a throwaway one
+      // for end-to-end checks that must not touch the real sets.
+      let directory =
+        try ProcessInfo.processInfo.environment["SOUNDBOARD_LIBRARY_DIR"]
+        .map { URL(fileURLWithPath: $0, isDirectory: true) } ?? SetStore.defaultDirectory()
+      let library = SetStore(directory: directory)
       store = library
       loaded = try library.loadAll()
     } catch {
@@ -400,6 +407,7 @@ final class BoardModel {
 
   /// Tells the OSC controller which of these tiles play, so it can light their buttons.
   private func sendPlayingFeedback(for tileIDs: [UUID]) {
+    refreshMIDILights()
     guard osc.outputEnabled else { return }
     for tileID in Set(tileIDs) {
       guard let set = library.set(containingTile: tileID),
@@ -463,6 +471,14 @@ final class BoardModel {
     set.assignMIDI(note, to: tile.id)
     library.replace(set)
     save(set)
+    refreshMIDILights()
+  }
+
+  /// Lights the pads of the shown set's playing tiles; the shown set's notes are the ones the
+  /// controller triggers, so switching sets relights the pads.
+  private func refreshMIDILights() {
+    let playing = shownSet.tiles.filter { coordinator.state(of: $0.id) == .playing }
+    midiOutput.show(Set(playing.compactMap(\.midiTrigger)))
   }
 
   /// Gives the tile a hotkey (taking it from another tile of its set); nil clears it.
@@ -639,8 +655,10 @@ final class BoardModel {
     return master
   }
 
+  /// Called on every change of the shown set.
   private func rememberSelection() {
     UserDefaults.standard.set(library.selectedSetID.uuidString, forKey: Self.selectedSetKey)
+    refreshMIDILights()
   }
 }
 

@@ -133,6 +133,14 @@ Farrago; only run them when explicitly asked.
   background app's own `activate()` is ignored, so `AppActivation.bringForward`
   asks Launch Services to open the running bundle instead (verified from Chrome
   and Finder via the OSC address).
+- **MIDI output** (`MIDIOutput`, Settings → MIDI): one destination plus an "on"
+  velocity (colour on pad controllers), where Farrago has a per-device table.
+  Pads of the shown set's playing tiles are lit; `MIDILights` sends only changes,
+  and switching sets relights. Verified end to end with a virtual destination.
+- **`SOUNDBOARD_LIBRARY_DIR`** points the app at another set library, for
+  end-to-end checks on throwaway data (`open -g --env SOUNDBOARD_LIBRARY_DIR=… build/Soundboard.app`).
+  Handwritten test plists must store `Float` fields as exact float32 values, or
+  `PropertyListDecoder` rejects them ("does not fit in Float").
 - **Icon is drawn by `scripts/make-icon.swift`**, our own design; the generated
   `.icns` is committed so bundling doesn't need to redraw it.
 - **Own document format**: `SoundSet` is `Codable` with its own

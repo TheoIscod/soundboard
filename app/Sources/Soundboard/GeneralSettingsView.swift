@@ -6,11 +6,14 @@ import SwiftUI
 struct SettingsView: View {
   let hotKey: GlobalHotKey
   let osc: OSCService
+  let midiOutput: MIDIOutput
 
   var body: some View {
     TabView {
       GeneralSettingsView(hotKey: hotKey)
         .tabItem { Label("Général", systemImage: "gearshape") }
+      MIDISettingsView(output: midiOutput)
+        .tabItem { Label("MIDI", systemImage: "pianokeys") }
       OSCSettingsView(osc: osc)
         .tabItem { Label("OSC", systemImage: "network") }
     }
