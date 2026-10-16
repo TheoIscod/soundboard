@@ -10,8 +10,11 @@ struct ListRowView: View {
   let model: BoardModel
   let onEdit: () -> Void
   let onDelete: () -> Void
+  /// Release point, in `BoardSpace`, of a drag that moves this tile.
+  let onDrop: (CGPoint) -> Void
 
   @State private var isPressed = false
+  @State private var dragOffset = CGSize.zero
 
   var body: some View {
     HStack(spacing: 10) {
@@ -47,7 +50,16 @@ struct ListRowView: View {
     .background(rowBackground, in: RoundedRectangle(cornerRadius: 6))
     .opacity(tile.lastPlayed == nil ? 1 : 0.6)
     .contentShape(Rectangle())
-    .tileTrigger(tile, model: model, isPressed: $isPressed)
+    .tileTrigger(
+      tile,
+      model: model,
+      isPressed: $isPressed,
+      dragOffset: $dragOffset,
+      onDrop: onDrop
+    )
+    .offset(dragOffset)
+    .zIndex(dragOffset == .zero ? 0 : 1)
+    .opacity(dragOffset == .zero ? 1 : 0.85)
     .contextMenu {
       TileContextMenu(tile: tile, model: model, onEdit: onEdit, onDelete: onDelete)
     }
