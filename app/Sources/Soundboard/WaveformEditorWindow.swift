@@ -239,11 +239,9 @@ private struct EditorWaveform: View {
   @Binding var draft: PlayerSettings?
 
   @Environment(\.undoManager) private var undoManager
-  private static let space = "editorWaveform"
   @State private var selectionAnchor: TimeInterval?
   @State private var scrolling = WaveformScrollMonitor()
 
-  private var editor: TrimEditor { TrimEditor(duration: duration) }
   private var player: PlayerSettings { draft ?? tile.player }
 
   var body: some View {
@@ -251,7 +249,7 @@ private struct EditorWaveform: View {
       let size = geometry.size
       ZStack(alignment: .topLeading) {
         bars
-        Canvas { context, size in draw(in: &context, size: size) }
+        Canvas { context, size in drawSelection(in: &context, size: size) }
           .contentShape(Rectangle())
           .gesture(selectionGesture(width: size.width))
         Playhead(
@@ -259,29 +257,27 @@ private struct EditorWaveform: View {
           position: { model.previewPosition ?? model.playbackPosition(of: tile) },
           x: { CGFloat(viewport.x(of: $0, width: Double($1))) }
         )
-        handle(at: player.trimStart, size: size, isBar: true, name: "Début") {
-          editor.settingStart($0, in: $1)
+        TrimOverlay(
+          settings: tile.player,
+          duration: duration,
+          viewport: viewport,
+          draft: $draft
+        ) { settings, actionName in
+          // The whole drag is one undo step, back to where it started.
+          EditorUndo.set(
+            settings,
+            previous: tile.player,
+            tileID: tile.id,
+            model: model,
+            undoManager: undoManager,
+            actionName: actionName
+          )
         }
-        handle(at: duration - player.trimEnd, size: size, isBar: true, name: "Fin") {
-          editor.settingEnd($0, in: $1)
-        }
-        handle(
-          at: player.trimStart + player.fadeInTime,
-          size: size,
-          isBar: false,
-          name: "Fondu d’entrée"
-        ) { editor.settingFadeInEnd($0, in: $1) }
-        handle(
-          at: duration - player.trimEnd - player.fadeOutTime,
-          size: size,
-          isBar: false,
-          name: "Fondu de sortie"
-        ) { editor.settingFadeOutStart($0, in: $1) }
       }
-      .coordinateSpace(.named(Self.space))
       .onContinuousHover { phase in
         switch phase {
-        case .active(let location): scrolling.pointer = (location.x, size.width)
+        case .active(let location):
+          scrolling.pointer = (location.x, size.width, WaveformScrollMonitor.windowUnderPointer())
         case .ended: scrolling.pointer = nil
         }
       }
@@ -316,51 +312,20 @@ private struct EditorWaveform: View {
     }
   }
 
-  /// Everything but the bars and the playhead: cheap shapes, redrawn with the selection.
-  private func draw(in context: inout GraphicsContext, size: CGSize) {
-    let width = Double(size.width)
-    let startX = CGFloat(viewport.x(of: player.trimStart, width: width))
-    let endX = CGFloat(viewport.x(of: duration - player.trimEnd, width: width))
-    let dim = GraphicsContext.Shading.color(.black.opacity(0.3))
-    context.fill(Path(CGRect(x: 0, y: 0, width: max(startX, 0), height: size.height)), with: dim)
+  private func drawSelection(in context: inout GraphicsContext, size: CGSize) {
+    guard let selection else { return }
+    let from = CGFloat(viewport.x(of: selection.start, width: Double(size.width)))
+    let to = CGFloat(viewport.x(of: selection.end, width: Double(size.width)))
     context.fill(
-      Path(CGRect(x: endX, y: 0, width: max(size.width - endX, 0), height: size.height)),
-      with: dim
+      Path(CGRect(x: from, y: 0, width: max(to - from, 1), height: size.height)),
+      with: .color(Color.accentColor.opacity(0.2))
     )
-
-    if let selection {
-      let from = CGFloat(viewport.x(of: selection.start, width: width))
-      let to = CGFloat(viewport.x(of: selection.end, width: width))
-      context.fill(
-        Path(CGRect(x: from, y: 0, width: max(to - from, 1), height: size.height)),
-        with: .color(Color.accentColor.opacity(0.2))
-      )
-    }
-
-    var envelope = Path()
-    envelope.move(to: CGPoint(x: startX, y: size.height))
-    envelope.addLine(
-      to: CGPoint(
-        x: CGFloat(viewport.x(of: player.trimStart + player.fadeInTime, width: width)),
-        y: 0
-      )
-    )
-    envelope.addLine(
-      to: CGPoint(
-        x: CGFloat(
-          viewport.x(of: duration - player.trimEnd - player.fadeOutTime, width: width)
-        ),
-        y: 0
-      )
-    )
-    envelope.addLine(to: CGPoint(x: endX, y: size.height))
-    context.stroke(envelope, with: .color(.yellow), lineWidth: 1.5)
   }
 
   /// Drag to select; a click without dragging clears the selection; ⌥-click jumps the
   /// preview or the playing tile there.
   private func selectionGesture(width: CGFloat) -> some Gesture {
-    DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.space))
+    DragGesture(minimumDistance: 0)
       .onChanged { value in
         if selectionAnchor == nil, NSEvent.modifierFlags.contains(.option) {
           model.jump(tile, to: viewport.time(atX: Double(value.location.x), width: Double(width)))
@@ -374,57 +339,6 @@ private struct EditorWaveform: View {
         selection = range.length > 0 ? range : nil
       }
       .onEnded { _ in selectionAnchor = nil }
-  }
-
-  /// A trim bar (full height) or a fade dot (along the top) dragged to a time.
-  private func handle(
-    at time: TimeInterval,
-    size: CGSize,
-    isBar: Bool,
-    name: String,
-    edit: @escaping (TimeInterval, PlayerSettings) -> PlayerSettings
-  ) -> some View {
-    let x = CGFloat(viewport.x(of: time, width: Double(size.width)))
-    return Group {
-      if isBar {
-        Rectangle()
-          .fill(Color.primary.opacity(0.9))
-          .frame(width: 2, height: size.height)
-          .frame(width: 12, height: size.height)
-          .contentShape(Rectangle())
-          .position(x: x, y: size.height / 2)
-      } else {
-        Circle()
-          .fill(.yellow)
-          .frame(width: 11, height: 11)
-          .frame(width: 18, height: 18)
-          .contentShape(Circle())
-          .position(x: x, y: 9)
-      }
-    }
-    .opacity(x >= -6 && x <= size.width + 6 ? 1 : 0)
-    .gesture(
-      DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.space))
-        .onChanged { value in
-          let time = viewport.time(atX: Double(value.location.x), width: Double(size.width))
-          draft = edit(time, player)
-        }
-        .onEnded { _ in
-          // The whole drag is one undo step, back to where it started.
-          if let draft {
-            EditorUndo.set(
-              draft,
-              previous: tile.player,
-              tileID: tile.id,
-              model: model,
-              undoManager: undoManager,
-              actionName: name
-            )
-          }
-          draft = nil
-        }
-    )
-    .help(name)
   }
 }
 
